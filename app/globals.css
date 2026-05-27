@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: 250 250 250;
+  --color-fg: 23 23 23;
+}
+
+html,
+body {
+  background-color: rgb(var(--color-bg));
+  color: rgb(var(--color-fg));
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+body {
+  overscroll-behavior-y: none;
+}
+
+@layer components {
+  .btn-touch {
+    @apply min-h-touch px-5 rounded-2xl font-semibold text-base
+           active:scale-[0.98] transition-transform select-none;
+  }
+  .btn-primary {
+    @apply btn-touch bg-brand text-white shadow-md hover:bg-brand-dark;
+  }
+  .btn-secondary {
+    @apply btn-touch bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50;
+  }
+  .btn-danger {
+    @apply btn-touch bg-red-600 text-white hover:bg-red-700;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-sm border border-neutral-200;
+  }
+  .input {
+    @apply w-full min-h-touch px-4 rounded-xl border border-neutral-300
+           bg-white focus:outline-none focus:ring-2 focus:ring-brand text-base;
+  }
+}
+
+/* Scroll horizontal de tabs sin scrollbar visible */
+.scroll-x-hidden::-webkit-scrollbar {
+  display: none;
+}
+.scroll-x-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
