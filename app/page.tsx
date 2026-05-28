@@ -1,37 +1,49 @@
+import Image from "next/image";
 import Link from "next/link";
-
-const businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Charms App";
 
 export default function HomePage() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-6 bg-gradient-to-b from-neutral-50 to-neutral-100">
-      <div className="w-full max-w-md flex flex-col gap-8">
-        <div className="text-center">
-          <div className="text-6xl mb-3">💎</div>
-          <h1 className="text-3xl font-bold tracking-tight">{businessName}</h1>
-          <p className="text-neutral-500 mt-2">Sistema de venta en feria</p>
+    <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12 bg-cream-100">
+      <div className="w-full max-w-sm flex flex-col gap-12">
+        {/* Logo */}
+        <div className="flex justify-center">
+          <Image
+            src="/logo.svg"
+            alt="PELGY — Desde 1995"
+            width={260}
+            height={160}
+            priority
+            className="w-56 h-auto"
+          />
         </div>
 
-        <div className="flex flex-col gap-4">
+        {/* Ornamento divisorio */}
+        <div className="divider-ornament">
+          <span className="font-serif italic text-sm">
+            joyería personalizada
+          </span>
+        </div>
+
+        {/* Acciones */}
+        <div className="flex flex-col gap-3">
           <Link
             href="/sale"
-            className="btn-primary text-xl py-6 text-center"
-            aria-label="Iniciar venta"
+            className="btn-primary py-5 text-center text-base"
           >
-            🛒 VENDER
+            Iniciar venta
           </Link>
 
           <Link
             href="/admin"
-            className="btn-secondary text-base py-4 text-center"
-            aria-label="Administración"
+            className="btn-secondary py-4 text-center text-sm"
           >
-            ⚙️ Administración
+            Administración
           </Link>
         </div>
 
-        <p className="text-xs text-neutral-400 text-center mt-4">
-          PWA optimizada para tablet y celular
+        {/* Pie de pantalla */}
+        <p className="eyebrow text-center mt-8">
+          Sistema de feria
         </p>
       </div>
     </main>

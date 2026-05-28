@@ -13,39 +13,44 @@ import { formatCurrency, formatDate } from "@/lib/format";
 
 type TabKey = "config" | "products" | "categories" | "sales" | "import";
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: "config", label: "Configuración", icon: "⚙️" },
-  { key: "products", label: "Productos", icon: "💎" },
-  { key: "categories", label: "Categorías", icon: "📁" },
-  { key: "sales", label: "Ventas", icon: "📊" },
-  { key: "import", label: "Importar", icon: "📥" },
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "config", label: "Configuración" },
+  { key: "products", label: "Productos" },
+  { key: "categories", label: "Categorías" },
+  { key: "sales", label: "Ventas" },
+  { key: "import", label: "Importar" },
 ];
 
 export default function AdminPage() {
   const [tab, setTab] = useState<TabKey>("config");
 
   return (
-    <main className="min-h-screen bg-neutral-50">
-      <header className="sticky top-0 z-10 bg-white border-b border-neutral-200">
+    <main className="min-h-screen bg-cream-100">
+      <header className="sticky top-0 z-10 bg-cream-50/95 backdrop-blur border-b border-cream-300">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link href="/" className="text-neutral-500">
+          <Link
+            href="/"
+            className="text-ink-muted text-sm hover:text-brand-darker"
+          >
             ← Inicio
           </Link>
-          <h1 className="font-bold text-lg">Administración</h1>
+          <h1 className="font-serif text-xl tracking-wide text-ink">
+            Administración
+          </h1>
         </div>
-        <nav className="overflow-x-auto scroll-x-hidden border-t border-neutral-100">
+        <nav className="overflow-x-auto scroll-x-hidden border-t border-cream-300/60">
           <div className="max-w-5xl mx-auto flex gap-1 px-2 min-w-max">
             {TABS.map((t) => (
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={`px-4 py-3 text-sm whitespace-nowrap border-b-2 font-medium ${
+                className={`px-5 py-3 text-sm whitespace-nowrap border-b-2 tracking-wide transition-colors ${
                   tab === t.key
-                    ? "border-brand text-brand"
-                    : "border-transparent text-neutral-500 hover:text-neutral-900"
+                    ? "border-brand text-brand-darker"
+                    : "border-transparent text-ink-muted hover:text-ink"
                 }`}
               >
-                {t.icon} {t.label}
+                {t.label}
               </button>
             ))}
           </div>
@@ -92,15 +97,16 @@ function ConfigTab() {
       .from("settings")
       .upsert({ key: "armador_whatsapp", value: armadorPhone.trim() });
     setSaving(false);
-    setMsg(error ? `Error: ${error.message}` : "✅ Guardado");
+    setMsg(error ? `Error: ${error.message}` : "Guardado correctamente");
   };
 
-  if (loading) return <p className="text-neutral-500">Cargando...</p>;
+  if (loading)
+    return <p className="font-serif italic text-ink-muted">Cargando…</p>;
 
   return (
     <div className="card p-5 max-w-lg">
-      <h2 className="font-bold text-lg mb-2">WhatsApp del armador</h2>
-      <p className="text-sm text-neutral-500 mb-4">
+      <h2 className="display-md mb-2">WhatsApp del armador</h2>
+      <p className="text-sm text-ink-muted mb-4">
         Número del celular al que se enviarán los pedidos para ensamblar.
         Formato: con código de país, sin espacios. Ej: <code>573001234567</code>
       </p>
@@ -115,7 +121,9 @@ function ConfigTab() {
       <button className="btn-primary" onClick={save} disabled={saving}>
         {saving ? "Guardando..." : "Guardar"}
       </button>
-      {msg && <p className="text-sm mt-3">{msg}</p>}
+      {msg && (
+        <p className="text-sm mt-3 text-brand-darker italic">{msg}</p>
+      )}
     </div>
   );
 }
@@ -175,7 +183,8 @@ function ProductsTab() {
     load();
   };
 
-  if (loading) return <p className="text-neutral-500">Cargando...</p>;
+  if (loading)
+    return <p className="font-serif italic text-ink-muted">Cargando…</p>;
 
   return (
     <div>
@@ -217,7 +226,7 @@ function ProductsTab() {
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left">
+          <thead className="bg-cream-100 text-left text-ink-muted text-xs uppercase tracking-widest">
             <tr>
               <th className="p-3">Código</th>
               <th className="p-3">Nombre</th>
@@ -231,7 +240,7 @@ function ProductsTab() {
             {visible.map((p) => {
               const cat = categories.find((c) => c.id === p.category_id);
               return (
-                <tr key={p.id} className="border-t border-neutral-100">
+                <tr key={p.id} className="border-t border-cream-300/50">
                   <td className="p-3 font-mono text-xs">{p.code}</td>
                   <td className="p-3">{p.name}</td>
                   <td className="p-3">{formatCurrency(Number(p.price))}</td>
@@ -244,7 +253,7 @@ function ProductsTab() {
                         {cat.name}
                       </span>
                     ) : (
-                      <span className="text-neutral-400 text-xs">
+                      <span className="text-ink-light text-xs">
                         Sin categoría
                       </span>
                     )}
@@ -254,8 +263,8 @@ function ProductsTab() {
                       onClick={() => toggleActive(p)}
                       className={`px-2 py-1 rounded text-xs ${
                         p.active
-                          ? "bg-green-100 text-green-700"
-                          : "bg-neutral-100 text-neutral-500"
+                          ? "bg-brand/10 text-brand-darker"
+                          : "bg-cream-200 text-ink-light"
                       }`}
                     >
                       {p.active ? "Sí" : "No"}
@@ -272,7 +281,7 @@ function ProductsTab() {
                       Editar
                     </button>
                     <button
-                      className="text-red-500"
+                      className="text-red-700"
                       onClick={() => remove(p)}
                     >
                       Eliminar
@@ -283,7 +292,7 @@ function ProductsTab() {
             })}
             {visible.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-neutral-400">
+                <td colSpan={6} className="p-6 text-center text-ink-light">
                   Sin productos.
                 </td>
               </tr>
@@ -335,10 +344,11 @@ function ProductForm({
   };
 
   return (
-    <div className="card p-5 mb-4 border-brand border-2">
-      <h3 className="font-bold mb-3">
+    <div className="card-elevated p-5 mb-4 border-brand/40 border">
+      <h3 className="font-serif text-lg mb-4 text-ink">
         {product ? "Editar producto" : "Nuevo producto"}
       </h3>
+      {/* fields below */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <input
           className="input"
@@ -380,7 +390,7 @@ function ProductForm({
           Activo
         </label>
       </div>
-      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+      {error && <p className="text-red-700 text-sm mt-2">{error}</p>}
       <div className="flex gap-2 mt-4">
         <button
           className="btn-primary"
@@ -440,7 +450,8 @@ function CategoriesTab() {
     load();
   };
 
-  if (loading) return <p className="text-neutral-500">Cargando...</p>;
+  if (loading)
+    return <p className="font-serif italic text-ink-muted">Cargando…</p>;
 
   return (
     <div>
@@ -467,7 +478,7 @@ function CategoriesTab() {
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left">
+          <thead className="bg-cream-100 text-left text-ink-muted text-xs uppercase tracking-widest">
             <tr>
               <th className="p-3">Color</th>
               <th className="p-3">Nombre</th>
@@ -478,7 +489,7 @@ function CategoriesTab() {
           </thead>
           <tbody>
             {categories.map((c) => (
-              <tr key={c.id} className="border-t border-neutral-100">
+              <tr key={c.id} className="border-t border-cream-300/50">
                 <td className="p-3">
                   <span
                     className="inline-block w-6 h-6 rounded"
@@ -492,8 +503,8 @@ function CategoriesTab() {
                     onClick={() => toggleActive(c)}
                     className={`px-2 py-1 rounded text-xs ${
                       c.active
-                        ? "bg-green-100 text-green-700"
-                        : "bg-neutral-100 text-neutral-500"
+                        ? "bg-brand/10 text-brand-darker"
+                        : "bg-cream-200 text-ink-light"
                     }`}
                   >
                     {c.active ? "Sí" : "No"}
@@ -510,7 +521,7 @@ function CategoriesTab() {
                     Editar
                   </button>
                   <button
-                    className="text-red-500"
+                    className="text-red-700"
                     onClick={() => remove(c)}
                   >
                     Eliminar
@@ -520,7 +531,7 @@ function CategoriesTab() {
             ))}
             {categories.length === 0 && (
               <tr>
-                <td colSpan={5} className="p-6 text-center text-neutral-400">
+                <td colSpan={5} className="p-6 text-center text-ink-light">
                   Sin categorías.
                 </td>
               </tr>
@@ -568,8 +579,8 @@ function CategoryForm({
   };
 
   return (
-    <div className="card p-5 mb-4 border-brand border-2">
-      <h3 className="font-bold mb-3">
+    <div className="card-elevated p-5 mb-4 border-brand/40 border">
+      <h3 className="font-serif text-lg mb-4 text-ink">
         {category ? "Editar categoría" : "Nueva categoría"}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -584,7 +595,7 @@ function CategoryForm({
             type="color"
             value={color}
             onChange={(e) => setColor(e.target.value)}
-            className="w-14 h-12 rounded border border-neutral-300"
+            className="w-14 h-12 rounded-lg border border-cream-300"
           />
           <input
             className="input flex-1 font-mono"
@@ -608,7 +619,7 @@ function CategoryForm({
           Activa
         </label>
       </div>
-      {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
+      {error && <p className="text-red-700 text-sm mt-2">{error}</p>}
       <div className="flex gap-2 mt-4">
         <button
           className="btn-primary"
@@ -653,22 +664,21 @@ function SalesTab() {
     return { count: todays.length, total };
   }, [sales]);
 
-  if (loading) return <p className="text-neutral-500">Cargando...</p>;
+  if (loading)
+    return <p className="font-serif italic text-ink-muted">Cargando…</p>;
 
   return (
     <div>
-      <div className="card p-5 mb-4 flex flex-wrap gap-6">
+      <div className="card p-6 mb-4 flex flex-wrap gap-10">
         <div>
-          <div className="text-xs text-neutral-500 uppercase tracking-wide">
-            Ventas hoy
+          <div className="eyebrow mb-1">Ventas hoy</div>
+          <div className="font-serif text-4xl text-ink">
+            {todaySummary.count}
           </div>
-          <div className="text-3xl font-bold">{todaySummary.count}</div>
         </div>
         <div>
-          <div className="text-xs text-neutral-500 uppercase tracking-wide">
-            Ingresos hoy
-          </div>
-          <div className="text-3xl font-bold text-green-600">
+          <div className="eyebrow mb-1">Ingresos hoy</div>
+          <div className="font-serif text-4xl text-brand-darker">
             {formatCurrency(todaySummary.total)}
           </div>
         </div>
@@ -676,7 +686,7 @@ function SalesTab() {
 
       <div className="card overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left">
+          <thead className="bg-cream-100 text-left text-ink-muted text-xs uppercase tracking-widest">
             <tr>
               <th className="p-3">Factura</th>
               <th className="p-3">Ticket</th>
@@ -688,7 +698,7 @@ function SalesTab() {
           </thead>
           <tbody>
             {sales.map((s) => (
-              <tr key={s.id} className="border-t border-neutral-100">
+              <tr key={s.id} className="border-t border-cream-300/50">
                 <td className="p-3 font-mono text-xs">{s.invoice_number}</td>
                 <td className="p-3">#{s.ticket_number}</td>
                 <td className="p-3">{formatDate(s.created_at)}</td>
@@ -701,7 +711,7 @@ function SalesTab() {
             ))}
             {sales.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-neutral-400">
+                <td colSpan={6} className="p-6 text-center text-ink-light">
                   Aún no hay ventas registradas.
                 </td>
               </tr>
@@ -710,7 +720,7 @@ function SalesTab() {
         </table>
       </div>
 
-      <p className="text-xs text-neutral-400 mt-3">
+      <p className="text-xs text-ink-light mt-3">
         Se muestran las últimas 100 ventas. Para reportes avanzados, exporta
         desde Supabase.
       </p>
@@ -892,14 +902,14 @@ function ImportTab() {
 
   return (
     <div className="max-w-3xl">
-      <h2 className="font-bold text-lg mb-2">Importar productos</h2>
-      <p className="text-sm text-neutral-500 mb-3">
+      <h2 className="display-md mb-2">Importar productos</h2>
+      <p className="text-sm text-ink-muted mb-3">
         Pega el contenido de tu Excel/CSV. Columnas esperadas (en cualquier
         orden):{" "}
-        <code className="bg-neutral-100 px-1 rounded">codigo</code>,{" "}
-        <code className="bg-neutral-100 px-1 rounded">nombre</code>,{" "}
-        <code className="bg-neutral-100 px-1 rounded">precio</code>,{" "}
-        <code className="bg-neutral-100 px-1 rounded">categoria</code>{" "}
+        <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">codigo</code>,{" "}
+        <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">nombre</code>,{" "}
+        <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">precio</code>,{" "}
+        <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">categoria</code>{" "}
         (opcional).
         <br />
         Si una categoría no existe, se crea automáticamente. Si un código ya
@@ -923,7 +933,7 @@ function ImportTab() {
 
       {result && (
         <div className="card p-4 mt-4">
-          <h3 className="font-bold mb-2">Resultado</h3>
+          <h3 className="font-serif text-lg mb-3 text-ink">Resultado</h3>
           <p className="text-sm">
             ✅ Creados: <strong>{result.created}</strong>
           </p>
@@ -935,7 +945,7 @@ function ImportTab() {
           </p>
           {result.errors.length > 0 && (
             <details className="mt-2 text-xs">
-              <summary className="cursor-pointer text-neutral-600">
+              <summary className="cursor-pointer text-ink-muted">
                 Ver detalle
               </summary>
               <ul className="mt-2 space-y-1">

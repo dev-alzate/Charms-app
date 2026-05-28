@@ -1,11 +1,26 @@
 import type { Metadata, Viewport } from "next";
+import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 
-const businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Charms App";
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+  weight: ["300", "400", "500", "600", "700"],
+});
+
+const businessName = process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "PELGY";
 
 export const metadata: Metadata = {
   title: `${businessName} — POS`,
-  description: "Sistema POS para venta de charms personalizados en ferias",
+  description: "Sistema POS para venta de charms personalizados en feria",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -19,7 +34,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#7C3AED",
+  themeColor: "#A87E5A",
 };
 
 export default function RootLayout({
@@ -28,8 +43,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
-      <body className="min-h-screen antialiased">{children}</body>
+    <html lang="es" className={`${playfair.variable} ${inter.variable}`}>
+      <body className="min-h-screen antialiased font-sans">{children}</body>
     </html>
   );
 }

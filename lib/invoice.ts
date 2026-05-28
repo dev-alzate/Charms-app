@@ -27,13 +27,18 @@ export function downloadInvoice(sale: Sale): void {
   const contentWidth = pageWidth - margin * 2;
 
   // ─── Encabezado ───────────────────────────────────────────────────────
+  doc.setTextColor(168, 126, 90); // brand cobrizo PELGY
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text(BUSINESS_NAME, pageWidth / 2, y, { align: "center" });
-  y += 5;
+  doc.setFontSize(16);
+  // Spacing entre letras para look editorial
+  doc.text(BUSINESS_NAME.split("").join(" "), pageWidth / 2, y + 2, {
+    align: "center",
+  });
+  y += 7;
 
+  doc.setTextColor(61, 40, 23); // ink
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   if (BUSINESS_NIT) {
     doc.text(`NIT ${BUSINESS_NIT}`, pageWidth / 2, y, { align: "center" });
     y += 3.5;
@@ -91,18 +96,20 @@ export function downloadInvoice(sale: Sale): void {
     tableWidth: contentWidth,
     styles: {
       fontSize: 7.5,
-      cellPadding: 1,
+      cellPadding: 1.2,
       overflow: "linebreak",
+      textColor: [61, 40, 23], // ink
     },
     headStyles: {
       fontStyle: "bold",
-      fillColor: [240, 240, 240],
-      textColor: 20,
+      fillColor: [248, 241, 229], // cream-100
+      textColor: [79, 58, 38], // brand-darker
+      fontSize: 7,
     },
     columnStyles: {
-      0: { cellWidth: contentWidth - 22 },
-      1: { cellWidth: 7, halign: "center" },
-      2: { cellWidth: 15, halign: "right" },
+      0: { cellWidth: contentWidth - 26 },
+      1: { cellWidth: 10, halign: "center" },
+      2: { cellWidth: 16, halign: "right" },
     },
   });
 
@@ -113,10 +120,12 @@ export function downloadInvoice(sale: Sale): void {
   y += 4;
 
   // ─── Total ────────────────────────────────────────────────────────────
+  doc.setTextColor(79, 58, 38); // brand-darker
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
-  doc.text("TOTAL:", margin, y);
+  doc.text("TOTAL", margin, y);
   doc.text(formatCurrency(sale.total), pageWidth - margin, y, { align: "right" });
+  doc.setTextColor(61, 40, 23); // ink
   y += 5;
 
   doc.setFont("helvetica", "normal");
@@ -130,10 +139,12 @@ export function downloadInvoice(sale: Sale): void {
   // ─── Pie ──────────────────────────────────────────────────────────────
   doc.setFontSize(8);
   doc.setFont("helvetica", "italic");
-  doc.text("¡Gracias por tu compra!", pageWidth / 2, y, { align: "center" });
+  doc.setTextColor(168, 126, 90);
+  doc.text("Gracias por tu compra", pageWidth / 2, y, { align: "center" });
   y += 4;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
+  doc.setTextColor(139, 115, 85); // ink-muted
   doc.text("Joyería de charms personalizados", pageWidth / 2, y, {
     align: "center",
   });
