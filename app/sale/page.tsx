@@ -50,10 +50,10 @@ export default function SalePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
 
-  // ── Inicialización: nombre del vendedor desde localStorage ─────────────
+  // ── Inicialización: nombre del vendedor desde sessionStorage ─────────────
   useEffect(() => {
     const stored = typeof window !== "undefined"
-      ? window.localStorage.getItem(LS_IDENTIFIER)
+      ? window.sessionStorage.getItem(LS_IDENTIFIER)
       : null;
     if (stored && stored.trim()) {
       setIdentifier(stored.trim());
@@ -256,7 +256,7 @@ export default function SalePage() {
   const submitIdentifier = useCallback(() => {
     const name = identifierInput.trim();
     if (!name) return;
-    window.localStorage.setItem(LS_IDENTIFIER, name);
+    window.sessionStorage.setItem(LS_IDENTIFIER, name);
     setIdentifier(name);
     setIdentifierReady(true);
   }, [identifierInput]);
@@ -265,7 +265,7 @@ export default function SalePage() {
     setIdentifierInput(identifier);
     setIdentifier("");
     setIdentifierReady(false);
-    window.localStorage.removeItem(LS_IDENTIFIER);
+    window.sessionStorage.removeItem(LS_IDENTIFIER);
   }, [identifier]);
 
   // ═══════════════════════════════════════════════════════════════════════
