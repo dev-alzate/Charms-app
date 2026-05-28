@@ -19,6 +19,13 @@ import {
   formatCurrency,
 } from "@/lib/format";
 import { downloadInvoice } from "@/lib/invoice";
+import {
+  getPendingSales,
+  loadCatalogCache,
+  removePendingSale,
+  saveCatalogCache,
+  savePendingSale,
+} from "@/lib/offline";
 
 const BUSINESS_NAME = process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "PELGY";
 const LS_IDENTIFIER = "charms_identifier_name";
@@ -37,6 +44,11 @@ export default function SalePage() {
   const [armadorPhone, setArmadorPhone] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
+
+  // ── Estado offline ──────────────────────────────────────────────────────
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [syncStatus, setSyncStatus] = useState<"idle" | "syncing" | "done">("idle");
 
   // ── Estado del flujo de venta ───────────────────────────────────────────
   const [activeCategoryId, setActiveCategoryId] = useState<string | "ALL">("ALL");
@@ -93,13 +105,27 @@ export default function SalePage() {
         if (settingsRes.error) throw settingsRes.error;
 
         if (cancelled) return;
-        setCategories((catRes.data ?? []) as Category[]);
-        setProducts((prodRes.data ?? []) as Product[]);
-        setArmadorPhone(settingsRes.data?.value ?? "");
-      } catch (err) {
+        const cats = (catRes.data ?? []) as Category[];
+        const prods = (prodRes.data ?? []) as Product[];
+        const phone = settingsRes.data?.value ?? "";
+        setCategories(cats);
+        setProducts(prods);
+        setArmadorPhone(phone);
+        saveCatalogCache(cats, prods, phone);
+        setOfflineMode(false);
+        setPendingCount(getPendingSales().length);
+      } catch {
         if (cancelled) return;
-        const msg = err instanceof Error ? err.message : "Error cargando datos";
-        setLoadError(msg);
+        const cache = loadCatalogCache();
+        if (cache) {
+          setCategories(cache.categories);
+          setProducts(cache.products);
+          setArmadorPhone(cache.armadorPhone);
+          setOfflineMode(true);
+          setPendingCount(getPendingSales().length);
+        } else {
+          setLoadError("Sin conexión y sin datos guardados. Conéctate al menos una vez.");
+        }
       } finally {
         if (!cancelled) setLoadingCatalog(false);
       }
@@ -196,26 +222,46 @@ export default function SalePage() {
     setSubmitting(true);
     setSubmitError(null);
 
+    const salePayload = {
+      items: cart,
+      total: cartTotal,
+      payment_method: payment,
+      customer_name: customerName.trim() || null,
+      customer_phone: customerPhone.trim() || null,
+      identifier_name: identifier || null,
+    };
+
     try {
       const { data, error } = await supabase
         .from("sales")
-        .insert({
-          items: cart,
-          total: cartTotal,
-          payment_method: payment,
-          customer_name: customerName.trim() || null,
-          customer_phone: customerPhone.trim() || null,
-          identifier_name: identifier || null,
-        })
+        .insert(salePayload)
         .select()
         .single();
 
       if (error) throw error;
       setCompletedSale(data as Sale);
       setView("success");
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "No se pudo guardar la venta";
-      setSubmitError(msg);
+    } catch {
+      if (!navigator.onLine) {
+        const pending = savePendingSale(salePayload);
+        setPendingCount(getPendingSales().length);
+        setCompletedSale({
+          id: pending.localId,
+          invoice_number: `LOCAL-${Date.now()}`,
+          ticket_number: 0,
+          items: cart,
+          total: cartTotal,
+          payment_method: payment,
+          customer_name: customerName.trim() || null,
+          customer_phone: customerPhone.trim() || null,
+          identifier_name: identifier || null,
+          notes: null,
+          created_at: pending.createdAt,
+        } as Sale);
+        setView("success");
+      } else {
+        setSubmitError("No se pudo guardar la venta. Intenta de nuevo.");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -251,6 +297,32 @@ export default function SalePage() {
     if (!completedSale) return;
     downloadInvoice(completedSale);
   }, [completedSale]);
+
+  // ── Sincronización de ventas pendientes al recuperar conexión ──────────
+  useEffect(() => {
+    const syncPending = async () => {
+      const pending = getPendingSales();
+      if (pending.length === 0) return;
+      setSyncStatus("syncing");
+      for (const sale of pending) {
+        try {
+          const { localId, createdAt, ...payload } = sale;
+          void createdAt;
+          const { error } = await supabase.from("sales").insert(payload);
+          if (error) break;
+          removePendingSale(localId);
+        } catch {
+          break;
+        }
+      }
+      setPendingCount(getPendingSales().length);
+      setSyncStatus("done");
+      setTimeout(() => setSyncStatus("idle"), 3000);
+    };
+
+    window.addEventListener("online", syncPending);
+    return () => window.removeEventListener("online", syncPending);
+  }, []);
 
   // ── Submit del modal de identificación ──────────────────────────────────
   const submitIdentifier = useCallback(() => {
@@ -522,6 +594,26 @@ export default function SalePage() {
   // ─── Vista: grid (default) ─────────────────────────────────────────────
   return (
     <main className="min-h-screen pb-32 bg-cream-100">
+      {/* Banner offline */}
+      {offlineMode && (
+        <div className="bg-neutral-700 text-white text-xs text-center py-2 px-4">
+          Sin conexión — mostrando catálogo guardado
+          {pendingCount > 0 && ` · ${pendingCount} venta${pendingCount > 1 ? "s" : ""} pendiente${pendingCount > 1 ? "s" : ""} de sincronizar`}
+        </div>
+      )}
+      {!offlineMode && pendingCount > 0 && syncStatus !== "done" && (
+        <div className="bg-amber-500 text-white text-xs text-center py-2 px-4">
+          {syncStatus === "syncing"
+            ? "Sincronizando ventas guardadas…"
+            : `${pendingCount} venta${pendingCount > 1 ? "s" : ""} pendiente${pendingCount > 1 ? "s" : ""} de sincronizar`}
+        </div>
+      )}
+      {syncStatus === "done" && (
+        <div className="bg-green-600 text-white text-xs text-center py-2 px-4">
+          Ventas sincronizadas ✓
+        </div>
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-20 bg-cream-50/95 backdrop-blur border-b border-cream-300">
         <div className="px-4 py-3 flex items-center gap-3">
