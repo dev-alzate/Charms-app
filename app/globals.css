@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: 250 250 250;
-  --color-fg: 23 23 23;
+  --color-bg: 248 241 229;        /* cream-100 */
+  --color-fg: 61 40 23;           /* ink */
 }
 
 html,
@@ -19,34 +19,95 @@ body {
   overscroll-behavior-y: none;
 }
 
-@layer components {
-  .btn-touch {
-    @apply min-h-touch px-5 rounded-2xl font-semibold text-base
-           active:scale-[0.98] transition-transform select-none;
-  }
-  .btn-primary {
-    @apply btn-touch bg-brand text-white shadow-md hover:bg-brand-dark;
-  }
-  .btn-secondary {
-    @apply btn-touch bg-white text-neutral-900 border border-neutral-300 hover:bg-neutral-50;
-  }
-  .btn-danger {
-    @apply btn-touch bg-red-600 text-white hover:bg-red-700;
-  }
-  .card {
-    @apply bg-white rounded-2xl shadow-sm border border-neutral-200;
-  }
-  .input {
-    @apply w-full min-h-touch px-4 rounded-xl border border-neutral-300
-           bg-white focus:outline-none focus:ring-2 focus:ring-brand text-base;
+@layer base {
+  h1, h2, h3 {
+    @apply font-serif tracking-wide;
   }
 }
 
-/* Scroll horizontal de tabs sin scrollbar visible */
+@layer components {
+  /* ── Botones ─────────────────────────────────────────────── */
+  .btn-touch {
+    @apply min-h-touch px-6 rounded-full font-medium text-base
+           tracking-wider transition-all select-none
+           active:scale-[0.98];
+  }
+  .btn-primary {
+    @apply btn-touch bg-brand text-white shadow-sm
+           hover:bg-brand-dark hover:shadow;
+  }
+  .btn-secondary {
+    @apply btn-touch bg-transparent text-brand-darker
+           border border-brand/70 hover:bg-brand/5;
+  }
+  .btn-confirm {
+    @apply btn-touch bg-brand-darker text-cream-50 shadow-sm
+           hover:bg-ink hover:shadow;
+  }
+  .btn-ghost {
+    @apply btn-touch bg-transparent text-ink-muted hover:text-brand-darker;
+  }
+  .btn-danger {
+    @apply btn-touch bg-red-700 text-white hover:bg-red-800;
+  }
+
+  /* ── Cards ───────────────────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl border border-cream-300/70 shadow-[0_1px_2px_rgba(79,58,38,0.04)];
+  }
+  .card-elevated {
+    @apply card shadow-[0_8px_24px_-12px_rgba(79,58,38,0.18)];
+  }
+
+  /* ── Inputs ──────────────────────────────────────────────── */
+  .input {
+    @apply w-full min-h-touch px-5 rounded-2xl
+           border border-cream-300 bg-white
+           focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/30
+           text-base text-ink placeholder:text-ink-light/70
+           transition-colors;
+  }
+  .input-pill {
+    @apply input rounded-full;
+  }
+
+  /* ── Tipografía editorial ────────────────────────────────── */
+  .display-xl {
+    @apply font-serif text-4xl sm:text-5xl tracking-wide text-ink;
+  }
+  .display-lg {
+    @apply font-serif text-3xl tracking-wide text-ink;
+  }
+  .display-md {
+    @apply font-serif text-2xl tracking-wide text-ink;
+  }
+  .eyebrow {
+    @apply text-xs uppercase tracking-widest text-ink-muted font-medium;
+  }
+
+  /* ── Chips / Tags ────────────────────────────────────────── */
+  .chip {
+    @apply inline-flex items-center px-3 py-1 rounded-full
+           text-xs font-medium tracking-wide;
+  }
+}
+
+/* Scroll horizontal sin scrollbar visible (tabs categorías) */
 .scroll-x-hidden::-webkit-scrollbar {
   display: none;
 }
 .scroll-x-hidden {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+/* Líneas divisorias finas estilo editorial */
+.divider-ornament::before,
+.divider-ornament::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid theme("colors.cream.400");
+}
+.divider-ornament {
+  @apply flex items-center gap-3 text-ink-light;
 }

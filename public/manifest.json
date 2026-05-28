@@ -1,11 +1,11 @@
 {
-  "name": "Charms App",
-  "short_name": "Charms",
-  "description": "POS para venta de charms personalizados en feria",
+  "name": "PELGY POS",
+  "short_name": "PELGY",
+  "description": "Sistema POS de joyería en feria",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#fafafa",
-  "theme_color": "#7C3AED",
+  "background_color": "#F8F1E5",
+  "theme_color": "#A87E5A",
   "orientation": "portrait",
   "icons": [
     {
