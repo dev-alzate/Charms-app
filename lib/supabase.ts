@@ -35,6 +35,7 @@ export interface Product {
   name: string;
   price: number;
   category_id: string | null;
+  image_url: string | null;
   active: boolean;
   display_order: number;
   created_at: string;
