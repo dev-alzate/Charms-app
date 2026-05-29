@@ -1,15 +1,3 @@
--- =============================================================================
--- Charms App — Schema completo
---
--- Cómo usar:
---   1. Crea un proyecto en Supabase (https://supabase.com).
---   2. Abre SQL Editor.
---   3. Pega TODO este archivo y dale "Run".
---   4. Verifica en "Table Editor" que aparezcan: categories, products, sales, settings.
---
--- Es seguro re-ejecutarlo: usa IF NOT EXISTS y ON CONFLICT donde aplica.
--- =============================================================================
-
 -- Para gen_random_uuid()
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -62,6 +50,14 @@ CREATE TABLE IF NOT EXISTS settings (
   key        text PRIMARY KEY,
   value      text,
   updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sellers (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       text NOT NULL,
+  code       text NOT NULL UNIQUE,
+  active     boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 
 -- =============================================================================
@@ -158,6 +154,7 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sellers    ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS p_all_categories ON categories;
 CREATE POLICY p_all_categories ON categories FOR ALL USING (true) WITH CHECK (true);
@@ -171,6 +168,9 @@ CREATE POLICY p_all_sales ON sales FOR ALL USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS p_all_settings ON settings;
 CREATE POLICY p_all_settings ON settings FOR ALL USING (true) WITH CHECK (true);
 
+DROP POLICY IF EXISTS p_all_sellers ON sellers;
+CREATE POLICY p_all_sellers ON sellers FOR ALL USING (true) WITH CHECK (true);
+
 -- =============================================================================
 -- DATOS DE MUESTRA
 --
@@ -179,6 +179,9 @@ CREATE POLICY p_all_settings ON settings FOR ALL USING (true) WITH CHECK (true);
 -- =============================================================================
 
 INSERT INTO settings (key, value) VALUES ('armador_whatsapp', '')
+ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO settings (key, value) VALUES ('require_seller_login', 'false')
 ON CONFLICT (key) DO NOTHING;
 
 INSERT INTO categories (name, display_order, color, active) VALUES

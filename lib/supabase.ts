@@ -71,6 +71,14 @@ export interface Setting {
   updated_at: string;
 }
 
+export interface Seller {
+  id: string;
+  name: string;
+  code: string;
+  active: boolean;
+  created_at: string;
+}
+
 // ─── Tipo local solo de cliente ─────────────────────────────────────────────
 
 export interface CartItem extends SaleItem {
