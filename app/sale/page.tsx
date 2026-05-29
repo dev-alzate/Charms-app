@@ -37,6 +37,11 @@ export default function SalePage() {
   const [identifier, setIdentifier] = useState("");
   const [identifierInput, setIdentifierInput] = useState("");
   const [identifierReady, setIdentifierReady] = useState(false);
+  const [requireSellerLogin, setRequireSellerLogin] = useState(false);
+  const [settingLoaded, setSettingLoaded] = useState(false);
+  const [sellerCodeInput, setSellerCodeInput] = useState("");
+  const [identifierError, setIdentifierError] = useState<string | null>(null);
+  const [validatingIdentifier, setValidatingIdentifier] = useState(false);
 
   // ── Catálogo ────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
@@ -62,15 +67,39 @@ export default function SalePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
 
-  // ── Inicialización: nombre del vendedor desde sessionStorage ─────────────
+  // ── Inicialización: setting + nombre del vendedor desde sessionStorage ───
   useEffect(() => {
-    const stored = typeof window !== "undefined"
-      ? window.sessionStorage.getItem(LS_IDENTIFIER)
-      : null;
-    if (stored && stored.trim()) {
-      setIdentifier(stored.trim());
-      setIdentifierReady(true);
-    }
+    (async () => {
+      let requireLogin = false;
+      try {
+        const { data } = await supabase
+          .from("settings")
+          .select("value")
+          .eq("key", "require_seller_login")
+          .maybeSingle();
+        requireLogin = data?.value === "true";
+      } catch {
+        // Offline or error — don't block the seller
+        requireLogin = false;
+      }
+      setRequireSellerLogin(requireLogin);
+
+      const stored =
+        typeof window !== "undefined"
+          ? window.sessionStorage.getItem(LS_IDENTIFIER)
+          : null;
+      if (stored && stored.trim()) {
+        const validated =
+          typeof window !== "undefined"
+            ? window.sessionStorage.getItem("charms_seller_validated")
+            : null;
+        if (!requireLogin || validated === "true") {
+          setIdentifier(stored.trim());
+          setIdentifierReady(true);
+        }
+      }
+      setSettingLoaded(true);
+    })();
   }, []);
 
   // ── Carga del catálogo + settings ──────────────────────────────────────
@@ -325,19 +354,50 @@ export default function SalePage() {
   }, []);
 
   // ── Submit del modal de identificación ──────────────────────────────────
-  const submitIdentifier = useCallback(() => {
+  const submitIdentifier = useCallback(async () => {
     const name = identifierInput.trim();
     if (!name) return;
+
+    if (requireSellerLogin) {
+      const code = sellerCodeInput.trim();
+      if (!code) return;
+      setValidatingIdentifier(true);
+      setIdentifierError(null);
+      try {
+        const { data: seller } = await supabase
+          .from("sellers")
+          .select("id")
+          .eq("active", true)
+          .ilike("name", name)
+          .eq("code", code)
+          .maybeSingle();
+        if (!seller) {
+          setIdentifierError("Nombre o código de vendedor incorrecto.");
+          setValidatingIdentifier(false);
+          return;
+        }
+        window.sessionStorage.setItem("charms_seller_validated", "true");
+      } catch {
+        // Offline — allow through without blocking the seller
+        window.sessionStorage.setItem("charms_seller_validated", "true");
+      } finally {
+        setValidatingIdentifier(false);
+      }
+    }
+
     window.sessionStorage.setItem(LS_IDENTIFIER, name);
     setIdentifier(name);
     setIdentifierReady(true);
-  }, [identifierInput]);
+  }, [identifierInput, sellerCodeInput, requireSellerLogin]);
 
   const changeIdentifier = useCallback(() => {
     setIdentifierInput(identifier);
+    setSellerCodeInput("");
+    setIdentifierError(null);
     setIdentifier("");
     setIdentifierReady(false);
     window.sessionStorage.removeItem(LS_IDENTIFIER);
+    window.sessionStorage.removeItem("charms_seller_validated");
   }, [identifier]);
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -346,6 +406,15 @@ export default function SalePage() {
 
   // Modal de identificación bloqueante
   if (!identifierReady) {
+    // Esperar a que se cargue el setting antes de mostrar el formulario
+    if (!settingLoaded) {
+      return (
+        <main className="min-h-screen flex items-center justify-center bg-cream-100">
+          <p className="font-serif italic text-ink-muted">Cargando…</p>
+        </main>
+      );
+    }
+
     return (
       <main className="min-h-screen flex items-center justify-center p-6 bg-cream-100">
         <div className="card-elevated p-8 w-full max-w-md">
@@ -360,25 +429,50 @@ export default function SalePage() {
           </div>
           <h1 className="display-md text-center mb-2">¿Quién está vendiendo?</h1>
           <p className="text-sm text-ink-muted text-center mb-6">
-            Tu nombre quedará registrado en cada venta del turno.
+            {requireSellerLogin
+              ? "Ingresa tu nombre y código de vendedor para comenzar."
+              : "Tu nombre quedará registrado en cada venta del turno."}
           </p>
           <input
-            className="input mb-4 text-center"
+            className="input mb-3 text-center"
             type="text"
             placeholder="Tu nombre"
             value={identifierInput}
             onChange={(e) => setIdentifierInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") submitIdentifier();
+              if (e.key === "Enter" && !requireSellerLogin)
+                void submitIdentifier();
             }}
             autoFocus
           />
+          {requireSellerLogin && (
+            <input
+              className="input mb-4 text-center font-mono tracking-widest"
+              type="password"
+              inputMode="numeric"
+              placeholder="Código de vendedor"
+              value={sellerCodeInput}
+              onChange={(e) => setSellerCodeInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void submitIdentifier();
+              }}
+            />
+          )}
+          {identifierError && (
+            <p className="text-red-700 text-sm text-center mb-3">
+              {identifierError}
+            </p>
+          )}
           <button
             className="btn-primary w-full py-5"
-            onClick={submitIdentifier}
-            disabled={!identifierInput.trim()}
+            onClick={() => void submitIdentifier()}
+            disabled={
+              !identifierInput.trim() ||
+              (requireSellerLogin && !sellerCodeInput.trim()) ||
+              validatingIdentifier
+            }
           >
-            Continuar
+            {validatingIdentifier ? "Verificando…" : "Continuar"}
           </button>
           <Link
             href="/"
@@ -687,7 +781,6 @@ export default function SalePage() {
                 className="card p-3 text-left active:scale-[0.98] transition-all hover:border-brand/50 hover:shadow-md"
                 onClick={() => addToCart(p)}
               >
-                {/* Imagen o avatar con inicial */}
                 <div className="w-full aspect-square rounded-lg overflow-hidden bg-cream-200 flex items-center justify-center mb-2">
                   {p.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element

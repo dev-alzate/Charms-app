@@ -1,17 +1,18 @@
 "use client";
 
-import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Category,
   PAYMENT_LABELS,
   Product,
   Sale,
+  Seller,
   supabase,
 } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/format";
 
-type TabKey = "config" | "products" | "categories" | "sales" | "import";
+type TabKey = "config" | "products" | "categories" | "sales" | "import" | "sellers";
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "config", label: "Configuración" },
@@ -19,6 +20,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "categories", label: "Categorías" },
   { key: "sales", label: "Ventas" },
   { key: "import", label: "Importar" },
+  { key: "sellers", label: "Vendedores" },
 ];
 
 export default function AdminPage() {
@@ -28,15 +30,21 @@ export default function AdminPage() {
     <main className="min-h-screen bg-cream-100">
       <header className="sticky top-0 z-10 bg-cream-50/95 backdrop-blur border-b border-cream-300">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link
-            href="/"
+          <button
+            onClick={() => signOut({ callbackUrl: "/" })}
             className="text-ink-muted text-sm hover:text-brand-darker"
           >
             ← Inicio
-          </Link>
-          <h1 className="font-serif text-xl tracking-wide text-ink">
+          </button>
+          <h1 className="font-serif text-xl tracking-wide text-ink flex-1">
             Administración
           </h1>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            className="text-sm text-ink-muted hover:text-red-700 transition-colors"
+          >
+            Cerrar sesión
+          </button>
         </div>
         <nav className="overflow-x-auto scroll-x-hidden border-t border-cream-300/60">
           <div className="max-w-5xl mx-auto flex gap-1 px-2 min-w-max">
@@ -63,6 +71,7 @@ export default function AdminPage() {
         {tab === "categories" && <CategoriesTab />}
         {tab === "sales" && <SalesTab />}
         {tab === "import" && <ImportTab />}
+        {tab === "sellers" && <SellersTab />}
       </section>
     </main>
   );
@@ -74,18 +83,25 @@ export default function AdminPage() {
 
 function ConfigTab() {
   const [armadorPhone, setArmadorPhone] = useState("");
+  const [requireSellerLogin, setRequireSellerLogin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingSellerLogin, setSavingSellerLogin] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("settings")
         .select("*")
-        .eq("key", "armador_whatsapp")
-        .maybeSingle();
-      if (!error) setArmadorPhone(data?.value ?? "");
+        .in("key", ["armador_whatsapp", "require_seller_login"]);
+      const rows = (data ?? []) as { key: string; value: string }[];
+      setArmadorPhone(
+        rows.find((r) => r.key === "armador_whatsapp")?.value ?? ""
+      );
+      setRequireSellerLogin(
+        rows.find((r) => r.key === "require_seller_login")?.value === "true"
+      );
       setLoading(false);
     })();
   }, []);
@@ -100,30 +116,77 @@ function ConfigTab() {
     setMsg(error ? `Error: ${error.message}` : "Guardado correctamente");
   };
 
+  const saveSellerLogin = async (val: boolean) => {
+    setSavingSellerLogin(true);
+    await supabase
+      .from("settings")
+      .upsert({ key: "require_seller_login", value: val ? "true" : "false" });
+    setSavingSellerLogin(false);
+    setRequireSellerLogin(val);
+  };
+
   if (loading)
     return <p className="font-serif italic text-ink-muted">Cargando…</p>;
 
   return (
-    <div className="card p-5 max-w-lg">
-      <h2 className="display-md mb-2">WhatsApp del armador</h2>
-      <p className="text-sm text-ink-muted mb-4">
-        Número del celular al que se enviarán los pedidos para ensamblar.
-        Formato: con código de país, sin espacios. Ej: <code>573001234567</code>
-      </p>
-      <input
-        className="input mb-4"
-        type="tel"
-        inputMode="numeric"
-        placeholder="573001234567"
-        value={armadorPhone}
-        onChange={(e) => setArmadorPhone(e.target.value)}
-      />
-      <button className="btn-primary" onClick={save} disabled={saving}>
-        {saving ? "Guardando..." : "Guardar"}
-      </button>
-      {msg && (
-        <p className="text-sm mt-3 text-brand-darker italic">{msg}</p>
-      )}
+    <div className="flex flex-col gap-6 max-w-lg">
+      {/* Armador WhatsApp */}
+      <div className="card p-5">
+        <h2 className="display-md mb-2">WhatsApp del armador</h2>
+        <p className="text-sm text-ink-muted mb-4">
+          Número del celular al que se enviarán los pedidos para ensamblar.
+          Formato: con código de país, sin espacios. Ej:{" "}
+          <code>573001234567</code>
+        </p>
+        <input
+          className="input mb-4"
+          type="tel"
+          inputMode="numeric"
+          placeholder="573001234567"
+          value={armadorPhone}
+          onChange={(e) => setArmadorPhone(e.target.value)}
+        />
+        <button className="btn-primary" onClick={save} disabled={saving}>
+          {saving ? "Guardando..." : "Guardar"}
+        </button>
+        {msg && (
+          <p className="text-sm mt-3 text-brand-darker italic">{msg}</p>
+        )}
+      </div>
+
+      {/* Login de vendedores */}
+      <div className="card p-5">
+        <h2 className="display-md mb-2">Login de vendedores</h2>
+        <p className="text-sm text-ink-muted mb-4">
+          Cuando está activo, los vendedores deben ingresar su nombre y código
+          al iniciar turno en la pantalla de venta. Gestiona los vendedores en
+          la pestaña <strong>Vendedores</strong>.
+        </p>
+        <div
+          className={`flex items-center gap-3 cursor-pointer select-none w-fit ${
+            savingSellerLogin ? "opacity-50 pointer-events-none" : ""
+          }`}
+          onClick={() => saveSellerLogin(!requireSellerLogin)}
+        >
+          <div
+            className={`relative w-11 h-6 rounded-full transition-colors ${
+              requireSellerLogin ? "bg-brand" : "bg-cream-300"
+            }`}
+          >
+            <div
+              className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                requireSellerLogin ? "translate-x-5" : "translate-x-[2px]"
+              }`}
+            />
+          </div>
+          <span className="text-sm text-ink">
+            Requerir login de vendedor en pantalla de venta
+          </span>
+        </div>
+        {savingSellerLogin && (
+          <p className="text-xs text-ink-muted mt-2 italic">Guardando…</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -350,7 +413,6 @@ function ProductForm({
 
     let image_url = product?.image_url ?? null;
 
-    // Si hay un archivo nuevo, subirlo a Supabase Storage
     if (imageFile) {
       setUploadingImage(true);
       const ext = imageFile.name.split(".").pop() ?? "jpg";
@@ -373,7 +435,6 @@ function ProductForm({
       setUploadingImage(false);
     }
 
-    // Si se eliminó la imagen existente
     if (!imagePreview && !imageFile) {
       image_url = null;
     }
@@ -390,7 +451,6 @@ function ProductForm({
     const { error: saveError } = product
       ? await supabase.from("products").update(payload).eq("id", product.id)
       : await supabase.from("products").insert(payload);
-
     setSaving(false);
     if (saveError) setError(saveError.message);
     else onSaved();
@@ -406,7 +466,6 @@ function ProductForm({
       <div className="mb-4">
         <p className="eyebrow mb-2">Foto del producto</p>
         <div className="flex items-center gap-4">
-          {/* Preview */}
           <div className="w-20 h-20 rounded-xl border border-cream-300 overflow-hidden bg-cream-100 flex items-center justify-center flex-shrink-0">
             {imagePreview ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -421,8 +480,6 @@ function ProductForm({
               </span>
             )}
           </div>
-
-          {/* Acciones */}
           <div className="flex flex-col gap-2">
             <label className="btn-secondary text-xs py-2 px-3 cursor-pointer">
               {imagePreview ? "Cambiar foto" : "Subir foto"}
@@ -1061,6 +1118,223 @@ function ImportTab() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// Tab: Vendedores
+// ═════════════════════════════════════════════════════════════════════════
+
+function CodeCell({ code }: { code: string }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="flex items-center gap-2">
+      <span className="font-mono text-xs">{visible ? code : "••••"}</span>
+      <button
+        className="text-xs text-ink-muted hover:text-brand-darker underline"
+        onClick={() => setVisible((v) => !v)}
+      >
+        {visible ? "Ocultar" : "Ver"}
+      </button>
+    </span>
+  );
+}
+
+function SellersTab() {
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Seller | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("sellers")
+      .select("*")
+      .order("name", { ascending: true });
+    setSellers((data ?? []) as Seller[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toggleActive = async (s: Seller) => {
+    await supabase
+      .from("sellers")
+      .update({ active: !s.active })
+      .eq("id", s.id);
+    load();
+  };
+
+  const remove = async (s: Seller) => {
+    if (!confirm(`¿Eliminar al vendedor "${s.name}"?`)) return;
+    await supabase.from("sellers").delete().eq("id", s.id);
+    load();
+  };
+
+  if (loading)
+    return <p className="font-serif italic text-ink-muted">Cargando…</p>;
+
+  return (
+    <div>
+      <p className="text-sm text-ink-muted mb-4">
+        Los vendedores se identifican con nombre y código al iniciar turno,
+        cuando el login de vendedor está activo en Configuración.
+      </p>
+      <button
+        className="btn-primary mb-4"
+        onClick={() => {
+          setEditing(null);
+          setShowForm(true);
+        }}
+      >
+        + Nuevo vendedor
+      </button>
+
+      {showForm && (
+        <SellerForm
+          seller={editing}
+          onCancel={() => setShowForm(false)}
+          onSaved={() => {
+            setShowForm(false);
+            load();
+          }}
+        />
+      )}
+
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-cream-100 text-left text-ink-muted text-xs uppercase tracking-widest">
+            <tr>
+              <th className="p-3">Nombre</th>
+              <th className="p-3">Código</th>
+              <th className="p-3">Activo</th>
+              <th className="p-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sellers.map((s) => (
+              <tr key={s.id} className="border-t border-cream-300/50">
+                <td className="p-3 font-medium">{s.name}</td>
+                <td className="p-3">
+                  <CodeCell code={s.code} />
+                </td>
+                <td className="p-3">
+                  <button
+                    onClick={() => toggleActive(s)}
+                    className={`px-2 py-1 rounded text-xs ${
+                      s.active
+                        ? "bg-brand/10 text-brand-darker"
+                        : "bg-cream-200 text-ink-light"
+                    }`}
+                  >
+                    {s.active ? "Sí" : "No"}
+                  </button>
+                </td>
+                <td className="p-3 text-right">
+                  <button
+                    className="text-brand mr-2"
+                    onClick={() => {
+                      setEditing(s);
+                      setShowForm(true);
+                    }}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    className="text-red-700"
+                    onClick={() => remove(s)}
+                  >
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {sellers.length === 0 && (
+              <tr>
+                <td colSpan={4} className="p-6 text-center text-ink-light">
+                  Sin vendedores creados aún.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SellerForm({
+  seller,
+  onCancel,
+  onSaved,
+}: {
+  seller: Seller | null;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(seller?.name ?? "");
+  const [code, setCode] = useState(seller?.code ?? "");
+  const [active, setActive] = useState(seller?.active ?? true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    const payload = { name: name.trim(), code: code.trim(), active };
+    const { error: err } = seller
+      ? await supabase.from("sellers").update(payload).eq("id", seller.id)
+      : await supabase.from("sellers").insert(payload);
+    setSaving(false);
+    if (err) setError(err.message);
+    else onSaved();
+  };
+
+  return (
+    <div className="card-elevated p-5 mb-4 border-brand/40 border">
+      <h3 className="font-serif text-lg mb-4 text-ink">
+        {seller ? "Editar vendedor" : "Nuevo vendedor"}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <input
+          className="input"
+          placeholder="Nombre (ej: María)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+        <input
+          className="input font-mono"
+          placeholder="Código (ej: 4321)"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+          />
+          Activo
+        </label>
+      </div>
+      {error && <p className="text-red-700 text-sm mt-2">{error}</p>}
+      <div className="flex gap-2 mt-4">
+        <button
+          className="btn-primary"
+          onClick={save}
+          disabled={saving || !name.trim() || !code.trim()}
+        >
+          {saving ? "Guardando..." : "Guardar"}
+        </button>
+        <button className="btn-secondary" onClick={onCancel}>
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }
