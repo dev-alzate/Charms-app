@@ -20,11 +20,15 @@ CREATE TABLE IF NOT EXISTS products (
   name          text NOT NULL,
   price         numeric(12, 2) NOT NULL CHECK (price >= 0),
   category_id   uuid REFERENCES categories(id) ON DELETE SET NULL,
+  image_url     text,
   active        boolean NOT NULL DEFAULT true,
   display_order int NOT NULL DEFAULT 0,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
+
+-- Migración para bases existentes (sin efecto si la columna ya existe)
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url text;
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_active   ON products(active);

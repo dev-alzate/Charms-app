@@ -778,21 +778,30 @@ export default function SalePage() {
             {visibleProducts.map((p) => (
               <button
                 key={p.id}
-                className="card p-4 text-left active:scale-[0.98] transition-all hover:border-brand/50 hover:shadow-md"
+                className="card p-3 text-left active:scale-[0.98] transition-all hover:border-brand/50 hover:shadow-md"
                 onClick={() => addToCart(p)}
               >
-                <div className="w-10 h-10 rounded-full bg-cream-200 flex items-center justify-center mb-3">
-                  <span className="font-serif text-lg text-brand-dark">
-                    {p.name.charAt(0).toUpperCase()}
-                  </span>
+                <div className="w-full aspect-square rounded-lg overflow-hidden bg-cream-200 flex items-center justify-center mb-2">
+                  {p.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.image_url}
+                      alt={p.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="font-serif text-2xl text-brand-dark">
+                      {p.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
                 </div>
                 <div className="font-medium text-sm leading-tight line-clamp-2 text-ink">
                   {p.name}
                 </div>
-                <div className="text-xs text-ink-light mt-1 font-mono">
+                <div className="text-xs text-ink-light mt-0.5 font-mono">
                   {p.code}
                 </div>
-                <div className="font-serif text-brand-darker text-lg mt-2">
+                <div className="font-serif text-brand-darker text-base mt-1">
                   {formatCurrency(Number(p.price))}
                 </div>
               </button>

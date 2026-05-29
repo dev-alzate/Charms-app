@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -31,12 +30,12 @@ export default function AdminPage() {
     <main className="min-h-screen bg-cream-100">
       <header className="sticky top-0 z-10 bg-cream-50/95 backdrop-blur border-b border-cream-300">
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link
-            href="/"
+          <button
+            onClick={() => signOut({ callbackUrl: "/" })}
             className="text-ink-muted text-sm hover:text-brand-darker"
           >
             ← Inicio
-          </Link>
+          </button>
           <h1 className="font-serif text-xl tracking-wide text-ink flex-1">
             Administración
           </h1>
@@ -389,21 +388,71 @@ function ProductForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Imagen ──────────────────────────────────────────────────────────────
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(
+    product?.image_url ?? null
+  );
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
   const save = async () => {
     setSaving(true);
     setError(null);
+
+    let image_url = product?.image_url ?? null;
+
+    if (imageFile) {
+      setUploadingImage(true);
+      const ext = imageFile.name.split(".").pop() ?? "jpg";
+      const path = `products/${code.trim() || Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(path, imageFile, { upsert: true });
+
+      if (uploadError) {
+        setError(`Error al subir imagen: ${uploadError.message}`);
+        setSaving(false);
+        setUploadingImage(false);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(path);
+      image_url = urlData.publicUrl;
+      setUploadingImage(false);
+    }
+
+    if (!imagePreview && !imageFile) {
+      image_url = null;
+    }
+
     const payload = {
       code: code.trim(),
       name: name.trim(),
       price: Number(price),
       category_id: categoryId || null,
+      image_url,
       active,
     };
-    const { error } = product
+
+    const { error: saveError } = product
       ? await supabase.from("products").update(payload).eq("id", product.id)
       : await supabase.from("products").insert(payload);
     setSaving(false);
-    if (error) setError(error.message);
+    if (saveError) setError(saveError.message);
     else onSaved();
   };
 
@@ -412,7 +461,51 @@ function ProductForm({
       <h3 className="font-serif text-lg mb-4 text-ink">
         {product ? "Editar producto" : "Nuevo producto"}
       </h3>
-      {/* fields below */}
+
+      {/* Foto del producto */}
+      <div className="mb-4">
+        <p className="eyebrow mb-2">Foto del producto</p>
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded-xl border border-cream-300 overflow-hidden bg-cream-100 flex items-center justify-center flex-shrink-0">
+            {imagePreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imagePreview}
+                alt="Vista previa"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="font-serif text-2xl text-brand-dark">
+                {name.charAt(0).toUpperCase() || "?"}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="btn-secondary text-xs py-2 px-3 cursor-pointer">
+              {imagePreview ? "Cambiar foto" : "Subir foto"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImagePick}
+              />
+            </label>
+            {imagePreview && (
+              <button
+                type="button"
+                onClick={removeImage}
+                className="text-xs text-red-600 hover:text-red-800"
+              >
+                Quitar foto
+              </button>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-ink-light mt-2">
+          Acepta JPG, PNG o WEBP. Se recomienda foto cuadrada.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <input
           className="input"
@@ -454,14 +547,16 @@ function ProductForm({
           Activo
         </label>
       </div>
+
       {error && <p className="text-red-700 text-sm mt-2">{error}</p>}
+
       <div className="flex gap-2 mt-4">
         <button
           className="btn-primary"
           onClick={save}
-          disabled={saving || !code.trim() || !name.trim() || !price}
+          disabled={saving || uploadingImage || !code.trim() || !name.trim() || !price}
         >
-          {saving ? "Guardando..." : "Guardar"}
+          {uploadingImage ? "Subiendo imagen…" : saving ? "Guardando..." : "Guardar"}
         </button>
         <button className="btn-secondary" onClick={onCancel}>
           Cancelar
