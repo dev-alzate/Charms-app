@@ -42,7 +42,15 @@ export interface Product {
   updated_at: string;
 }
 
-export type PaymentMethod = "cash" | "nequi" | "daviplata";
+export type PaymentMethod = "cash" | "transfer" | "card";
+
+export interface PaymentMethodConfig {
+  id: string;
+  key: string;
+  label: string;
+  active: boolean;
+  display_order: number;
+}
 
 export interface SaleItem {
   product_id: string;
@@ -86,8 +94,12 @@ export interface CartItem extends SaleItem {
   // mismo shape que SaleItem; lo separamos por claridad semántica
 }
 
-export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  cash: "Efectivo",
-  nequi: "Nequi",
+// Fallback estático para mostrar etiquetas (usado en historial de ventas)
+export const PAYMENT_LABELS: Record<string, string> = {
+  cash:     "Efectivo",
+  transfer: "Transferencia",
+  card:     "Datafono",
+  // compatibilidad con ventas antiguas
+  nequi:     "Nequi",
   daviplata: "Daviplata",
 };

@@ -8,6 +8,7 @@ import {
   Category,
   PAYMENT_LABELS,
   PaymentMethod,
+  PaymentMethodConfig,
   Product,
   Sale,
   supabase,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/format";
 import { downloadInvoice } from "@/lib/invoice";
 import {
+  DEFAULT_PAYMENT_METHODS,
   getPendingSales,
   loadCatalogCache,
   removePendingSale,
@@ -45,6 +47,7 @@ export default function SalePage() {
   // ── Catálogo ────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
 
@@ -109,7 +112,7 @@ export default function SalePage() {
       setLoadingCatalog(true);
       setLoadError(null);
       try {
-        const [catRes, prodRes] = await Promise.all([
+        const [catRes, prodRes, pmRes] = await Promise.all([
           supabase
             .from("categories")
             .select("*")
@@ -117,6 +120,11 @@ export default function SalePage() {
             .order("display_order", { ascending: true }),
           supabase
             .from("products")
+            .select("*")
+            .eq("active", true)
+            .order("display_order", { ascending: true }),
+          supabase
+            .from("payment_methods")
             .select("*")
             .eq("active", true)
             .order("display_order", { ascending: true }),
@@ -128,9 +136,11 @@ export default function SalePage() {
         if (cancelled) return;
         const cats = (catRes.data ?? []) as Category[];
         const prods = (prodRes.data ?? []) as Product[];
+        const pms = (pmRes.data ?? []) as PaymentMethodConfig[];
         setCategories(cats);
         setProducts(prods);
-        saveCatalogCache(cats, prods);
+        setPaymentMethods(pms.length > 0 ? pms : DEFAULT_PAYMENT_METHODS);
+        saveCatalogCache(cats, prods, pms.length > 0 ? pms : DEFAULT_PAYMENT_METHODS);
         setOfflineMode(false);
         setPendingCount(getPendingSales().length);
       } catch {
@@ -139,6 +149,7 @@ export default function SalePage() {
         if (cache) {
           setCategories(cache.categories);
           setProducts(cache.products);
+          setPaymentMethods(cache.paymentMethods ?? DEFAULT_PAYMENT_METHODS);
           setOfflineMode(true);
           setPendingCount(getPendingSales().length);
         } else {
@@ -598,19 +609,24 @@ export default function SalePage() {
           <div className="card p-5 mb-4">
             <h2 className="eyebrow mb-3">Método de pago</h2>
             <div className="grid grid-cols-1 gap-2">
-              {(["cash", "nequi", "daviplata"] as PaymentMethod[]).map((m) => (
+              {paymentMethods.map((m) => (
                 <button
-                  key={m}
+                  key={m.key}
                   className={`btn-touch py-5 text-base border ${
-                    payment === m
+                    payment === m.key
                       ? "bg-brand text-white border-brand"
                       : "bg-white text-ink border-cream-300 hover:border-brand"
                   }`}
-                  onClick={() => setPayment(m)}
+                  onClick={() => setPayment(m.key as PaymentMethod)}
                 >
-                  {PAYMENT_LABELS[m]}
+                  {m.label}
                 </button>
               ))}
+              {paymentMethods.length === 0 && (
+                <p className="text-sm text-ink-light text-center py-4">
+                  No hay métodos de pago activos. Actívalos en el panel de administración.
+                </p>
+              )}
             </div>
           </div>
 

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Category,
   PAYMENT_LABELS,
+  PaymentMethodConfig,
   Product,
   Sale,
   Seller,
@@ -83,18 +84,32 @@ export default function AdminPage() {
 
 function ConfigTab() {
   const [requireSellerLogin, setRequireSellerLogin] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingSellerLogin, setSavingSellerLogin] = useState(false);
+  const [savingPm, setSavingPm] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("settings")
-        .select("value")
-        .eq("key", "require_seller_login")
-        .maybeSingle();
-      setRequireSellerLogin(data?.value === "true");
-      setLoading(false);
+      try {
+        const [settingRes, pmRes] = await Promise.all([
+          supabase
+            .from("settings")
+            .select("value")
+            .eq("key", "require_seller_login")
+            .maybeSingle(),
+          supabase
+            .from("payment_methods")
+            .select("*")
+            .order("display_order", { ascending: true }),
+        ]);
+        setRequireSellerLogin(settingRes.data?.value === "true");
+        setPaymentMethods((pmRes.data ?? []) as PaymentMethodConfig[]);
+      } catch {
+        // tabla aún no creada — se ignora hasta que corra la migración
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -107,11 +122,65 @@ function ConfigTab() {
     setRequireSellerLogin(val);
   };
 
+  const togglePaymentMethod = async (pm: PaymentMethodConfig) => {
+    setSavingPm(pm.key);
+    await supabase
+      .from("payment_methods")
+      .update({ active: !pm.active })
+      .eq("id", pm.id);
+    setPaymentMethods((prev) =>
+      prev.map((m) => (m.id === pm.id ? { ...m, active: !m.active } : m))
+    );
+    setSavingPm(null);
+  };
+
   if (loading)
     return <p className="font-serif italic text-ink-muted">Cargando…</p>;
 
   return (
     <div className="flex flex-col gap-6 max-w-lg">
+      {/* Métodos de pago */}
+      <div className="card p-5">
+        <h2 className="display-md mb-2">Métodos de pago</h2>
+        <p className="text-sm text-ink-muted mb-4">
+          Activa o desactiva los métodos que aparecen en la pantalla de venta.
+          Al menos uno debe quedar activo.
+        </p>
+        <div className="flex flex-col gap-3">
+          {paymentMethods.map((pm) => {
+            const isSaving = savingPm === pm.key;
+            const isLastActive =
+              pm.active && paymentMethods.filter((m) => m.active).length === 1;
+            return (
+              <div
+                key={pm.id}
+                className={`flex items-center gap-3 cursor-pointer select-none w-fit ${
+                  isSaving || isLastActive ? "opacity-50 pointer-events-none" : ""
+                }`}
+                onClick={() => !isLastActive && togglePaymentMethod(pm)}
+                title={isLastActive ? "Debe quedar al menos un método activo" : undefined}
+              >
+                <div
+                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                    pm.active ? "bg-brand" : "bg-cream-300"
+                  }`}
+                >
+                  <div
+                    className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      pm.active ? "translate-x-5" : "translate-x-[2px]"
+                    }`}
+                  />
+                </div>
+                <span className="text-sm text-ink">{pm.label}</span>
+                {isSaving && (
+                  <span className="text-xs text-ink-muted italic">Guardando…</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Login de vendedores */}
       <div className="card p-5">
         <h2 className="display-md mb-2">Login de vendedores</h2>
