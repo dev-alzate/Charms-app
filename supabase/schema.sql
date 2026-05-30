@@ -182,9 +182,6 @@ CREATE POLICY p_all_sellers ON sellers FOR ALL USING (true) WITH CHECK (true);
 -- Reemplázalos importando tu CSV desde /admin → Tab "Importar".
 -- =============================================================================
 
-INSERT INTO settings (key, value) VALUES ('armador_whatsapp', '')
-ON CONFLICT (key) DO NOTHING;
-
 INSERT INTO settings (key, value) VALUES ('require_seller_login', 'false')
 ON CONFLICT (key) DO NOTHING;
 
