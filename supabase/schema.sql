@@ -64,6 +64,14 @@ CREATE TABLE IF NOT EXISTS sellers (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key           text NOT NULL UNIQUE,
+  label         text NOT NULL,
+  active        boolean NOT NULL DEFAULT true,
+  display_order int NOT NULL DEFAULT 0
+);
+
 -- =============================================================================
 -- FUNCIONES Y TRIGGERS
 -- =============================================================================
@@ -158,7 +166,8 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE sellers    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sellers         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_methods ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS p_all_categories ON categories;
 CREATE POLICY p_all_categories ON categories FOR ALL USING (true) WITH CHECK (true);
@@ -175,15 +184,23 @@ CREATE POLICY p_all_settings ON settings FOR ALL USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS p_all_sellers ON sellers;
 CREATE POLICY p_all_sellers ON sellers FOR ALL USING (true) WITH CHECK (true);
 
--- =============================================================================
--- DATOS DE MUESTRA
---
--- Sirven para probar el sistema antes de cargar el catálogo real desde Excel.
--- Reemplázalos importando tu CSV desde /admin → Tab "Importar".
--- =============================================================================
+DROP POLICY IF EXISTS p_all_payment_methods ON payment_methods;
+CREATE POLICY p_all_payment_methods ON payment_methods FOR ALL USING (true) WITH CHECK (true);
+
+
 
 INSERT INTO settings (key, value) VALUES ('require_seller_login', 'false')
 ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO payment_methods (key, label, active, display_order) VALUES
+  ('cash',     'Efectivo',      true, 1),
+  ('transfer', 'Transferencia', true, 2),
+  ('card',     'Datafono',      true, 3)
+ON CONFLICT (key) DO NOTHING;
+
+ALTER TABLE sales DROP CONSTRAINT IF EXISTS sales_payment_method_check;
+ALTER TABLE sales ADD CONSTRAINT sales_payment_method_check
+  CHECK (payment_method IN ('cash', 'transfer', 'card'));
 
 INSERT INTO categories (name, display_order, color, active) VALUES
   ('Cadenas',    1, '#9333EA', true),
