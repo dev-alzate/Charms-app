@@ -82,39 +82,21 @@ export default function AdminPage() {
 // ═════════════════════════════════════════════════════════════════════════
 
 function ConfigTab() {
-  const [armadorPhone, setArmadorPhone] = useState("");
   const [requireSellerLogin, setRequireSellerLogin] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [savingSellerLogin, setSavingSellerLogin] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       const { data } = await supabase
         .from("settings")
-        .select("*")
-        .in("key", ["armador_whatsapp", "require_seller_login"]);
-      const rows = (data ?? []) as { key: string; value: string }[];
-      setArmadorPhone(
-        rows.find((r) => r.key === "armador_whatsapp")?.value ?? ""
-      );
-      setRequireSellerLogin(
-        rows.find((r) => r.key === "require_seller_login")?.value === "true"
-      );
+        .select("value")
+        .eq("key", "require_seller_login")
+        .maybeSingle();
+      setRequireSellerLogin(data?.value === "true");
       setLoading(false);
     })();
   }, []);
-
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    const { error } = await supabase
-      .from("settings")
-      .upsert({ key: "armador_whatsapp", value: armadorPhone.trim() });
-    setSaving(false);
-    setMsg(error ? `Error: ${error.message}` : "Guardado correctamente");
-  };
 
   const saveSellerLogin = async (val: boolean) => {
     setSavingSellerLogin(true);
@@ -130,30 +112,6 @@ function ConfigTab() {
 
   return (
     <div className="flex flex-col gap-6 max-w-lg">
-      {/* Armador WhatsApp */}
-      <div className="card p-5">
-        <h2 className="display-md mb-2">WhatsApp del armador</h2>
-        <p className="text-sm text-ink-muted mb-4">
-          Número del celular al que se enviarán los pedidos para ensamblar.
-          Formato: con código de país, sin espacios. Ej:{" "}
-          <code>573001234567</code>
-        </p>
-        <input
-          className="input mb-4"
-          type="tel"
-          inputMode="numeric"
-          placeholder="573001234567"
-          value={armadorPhone}
-          onChange={(e) => setArmadorPhone(e.target.value)}
-        />
-        <button className="btn-primary" onClick={save} disabled={saving}>
-          {saving ? "Guardando..." : "Guardar"}
-        </button>
-        {msg && (
-          <p className="text-sm mt-3 text-brand-darker italic">{msg}</p>
-        )}
-      </div>
-
       {/* Login de vendedores */}
       <div className="card p-5">
         <h2 className="display-md mb-2">Login de vendedores</h2>

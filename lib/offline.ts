@@ -6,7 +6,6 @@ const PENDING_KEY = "pelgy_pending_sales";
 export interface CatalogCache {
   categories: Category[];
   products: Product[];
-  armadorPhone: string;
   savedAt: number;
 }
 
@@ -23,11 +22,10 @@ export interface PendingSale {
 
 export function saveCatalogCache(
   categories: Category[],
-  products: Product[],
-  armadorPhone: string
+  products: Product[]
 ): void {
   if (typeof window === "undefined") return;
-  const cache: CatalogCache = { categories, products, armadorPhone, savedAt: Date.now() };
+  const cache: CatalogCache = { categories, products, savedAt: Date.now() };
   localStorage.setItem(CATALOG_KEY, JSON.stringify(cache));
 }
 

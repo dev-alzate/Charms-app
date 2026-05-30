@@ -13,7 +13,6 @@ import {
   supabase,
 } from "@/lib/supabase";
 import {
-  buildArmadorMessage,
   buildCustomerMessage,
   buildWhatsAppLink,
   formatCurrency,
@@ -46,7 +45,6 @@ export default function SalePage() {
   // ── Catálogo ────────────────────────────────────────────────────────────
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [armadorPhone, setArmadorPhone] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
 
@@ -111,7 +109,7 @@ export default function SalePage() {
       setLoadingCatalog(true);
       setLoadError(null);
       try {
-        const [catRes, prodRes, settingsRes] = await Promise.all([
+        const [catRes, prodRes] = await Promise.all([
           supabase
             .from("categories")
             .select("*")
@@ -122,25 +120,17 @@ export default function SalePage() {
             .select("*")
             .eq("active", true)
             .order("display_order", { ascending: true }),
-          supabase
-            .from("settings")
-            .select("*")
-            .eq("key", "armador_whatsapp")
-            .maybeSingle(),
         ]);
 
         if (catRes.error) throw catRes.error;
         if (prodRes.error) throw prodRes.error;
-        if (settingsRes.error) throw settingsRes.error;
 
         if (cancelled) return;
         const cats = (catRes.data ?? []) as Category[];
         const prods = (prodRes.data ?? []) as Product[];
-        const phone = settingsRes.data?.value ?? "";
         setCategories(cats);
         setProducts(prods);
-        setArmadorPhone(phone);
-        saveCatalogCache(cats, prods, phone);
+        saveCatalogCache(cats, prods);
         setOfflineMode(false);
         setPendingCount(getPendingSales().length);
       } catch {
@@ -149,7 +139,6 @@ export default function SalePage() {
         if (cache) {
           setCategories(cache.categories);
           setProducts(cache.products);
-          setArmadorPhone(cache.armadorPhone);
           setOfflineMode(true);
           setPendingCount(getPendingSales().length);
         } else {
@@ -297,18 +286,6 @@ export default function SalePage() {
   }, [payment, cart, cartTotal, customerName, customerPhone, identifier]);
 
   // ── Acciones post-venta ─────────────────────────────────────────────────
-  const openArmadorWhatsApp = useCallback(() => {
-    if (!completedSale) return;
-    if (!armadorPhone) {
-      alert(
-        "No hay número del armador configurado. Ve a /admin → Configuración."
-      );
-      return;
-    }
-    const msg = buildArmadorMessage(completedSale);
-    window.open(buildWhatsAppLink(armadorPhone, msg), "_blank");
-  }, [completedSale, armadorPhone]);
-
   const openCustomerWhatsApp = useCallback(() => {
     if (!completedSale) return;
     if (!completedSale.customer_phone) {
@@ -567,13 +544,7 @@ export default function SalePage() {
           </div>
 
           <div className="flex flex-col gap-3 mb-6">
-            <button
-              className="btn-primary py-5 text-base"
-              onClick={openArmadorWhatsApp}
-            >
-              Enviar al armador
-            </button>
-            <button className="btn-secondary py-4 text-sm" onClick={handleDownloadPDF}>
+            <button className="btn-primary py-5 text-base" onClick={handleDownloadPDF}>
               Descargar factura PDF
             </button>
             <button
