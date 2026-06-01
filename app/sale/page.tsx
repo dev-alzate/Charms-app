@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CartItem,
   Category,
@@ -50,6 +50,18 @@ export default function SalePage() {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+
+  // ── Paginación / scroll infinito ────────────────────────────────────────
+  const PAGE_SIZE = 30;
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  // Refs para acceso estable dentro del IntersectionObserver
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
+  const pageRef = useRef(0);
 
   // ── Estado offline ──────────────────────────────────────────────────────
   const [offlineMode, setOfflineMode] = useState(false);
@@ -112,14 +124,9 @@ export default function SalePage() {
       setLoadingCatalog(true);
       setLoadError(null);
       try {
-        const [catRes, prodRes, pmRes] = await Promise.all([
+        const [catRes, pmRes] = await Promise.all([
           supabase
             .from("categories")
-            .select("*")
-            .eq("active", true)
-            .order("display_order", { ascending: true }),
-          supabase
-            .from("products")
             .select("*")
             .eq("active", true)
             .order("display_order", { ascending: true }),
@@ -131,18 +138,35 @@ export default function SalePage() {
         ]);
 
         if (catRes.error) throw catRes.error;
-        if (prodRes.error) throw prodRes.error;
-
         if (cancelled) return;
+
         const cats = (catRes.data ?? []) as Category[];
-        const prods = (prodRes.data ?? []) as Product[];
         const pms = (pmRes.data ?? []) as PaymentMethodConfig[];
         setCategories(cats);
-        setProducts(prods);
         setPaymentMethods(pms.length > 0 ? pms : DEFAULT_PAYMENT_METHODS);
-        saveCatalogCache(cats, prods, pms.length > 0 ? pms : DEFAULT_PAYMENT_METHODS);
         setOfflineMode(false);
         setPendingCount(getPendingSales().length);
+
+        // Calentamiento de caché: carga todos los productos en background
+        // para que el modo offline tenga el catálogo completo disponible
+        supabase
+          .from("products")
+          .select("*")
+          .eq("active", true)
+          .order("display_order", { ascending: true })
+          .range(0, 999)
+          .then(({ data }) => {
+            if (data && !cancelled) {
+              const prods = data as Product[];
+              saveCatalogCache(
+                cats,
+                prods,
+                pms.length > 0 ? pms : DEFAULT_PAYMENT_METHODS
+              );
+            }
+          });
+
+        setCatalogLoaded(true);
       } catch {
         if (cancelled) return;
         const cache = loadCatalogCache();
@@ -165,37 +189,26 @@ export default function SalePage() {
     };
   }, [identifierReady]);
 
-  // ── Productos visibles según tab + búsqueda + filtro de precio ──────────
-  const visibleProducts = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  // ── Productos visibles: filtrado server-side (online) o client-side (offline) ─
+  const displayProducts = useMemo(() => {
+    if (!offlineMode) return products; // online → ya filtrados por Supabase
 
-    // Mapa categoryId → nombre para buscar también por categoría
-    const catNameMap = new Map(
-      categories.map((c) => [c.id, c.name.toLowerCase()])
-    );
-
-    // Si el usuario escribe solo dígitos (≥3), buscar por precio exacto
-    // Usamos string compare para evitar cualquier problema de precisión numérica
+    // Modo offline: filtrar en memoria contra la caché completa
+    const q = debouncedSearch.trim().toLowerCase();
     const priceQuery = /^\d{3,}$/.test(q) ? q : null;
 
     return products.filter((p) => {
-      // ── Filtro de categoría (tab) ─────────────────────────────────────
       const matchesCategory =
         activeCategoryId === "ALL" || p.category_id === activeCategoryId;
-
-      // ── Filtro de búsqueda de texto ───────────────────────────────────
       const matchesSearch =
         !q ||
         p.name.toLowerCase().includes(q) ||
         p.code.toLowerCase().includes(q) ||
-        (p.category_id
-          ? (catNameMap.get(p.category_id) ?? "").includes(q)
-          : false) ||
-        (priceQuery !== null && String(Math.round(Number(p.price))) === priceQuery);
-
+        (priceQuery !== null &&
+          String(Math.round(Number(p.price))) === priceQuery);
       return matchesCategory && matchesSearch;
     });
-  }, [products, categories, activeCategoryId, search]);
+  }, [products, offlineMode, debouncedSearch, activeCategoryId]);
 
   // ── Totales del carrito ─────────────────────────────────────────────────
   const cartTotal = useMemo(
@@ -331,6 +344,107 @@ export default function SalePage() {
     if (!completedSale) return;
     downloadInvoice(completedSale);
   }, [completedSale]);
+
+  // ── Debounce de búsqueda (300 ms) ──────────────────────────────────────
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // ── Fetch paginado de productos (server-side) ───────────────────────────
+  const fetchProducts = useCallback(
+    async (reset = false) => {
+      if (offlineMode) return; // offline usa la caché completa en memoria
+      if (loadingMoreRef.current && !reset) return; // guard anti-duplicados
+
+      loadingMoreRef.current = true;
+      setLoadingMore(true);
+
+      const currentPage = reset ? 0 : pageRef.current;
+      const from = currentPage * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      const q = debouncedSearch.trim().toLowerCase();
+      const priceQuery = /^\d{3,}$/.test(q) ? q : null;
+
+      let query = supabase
+        .from("products")
+        .select("*")
+        .eq("active", true)
+        .order("display_order", { ascending: true })
+        .range(from, to);
+
+      if (activeCategoryId !== "ALL") {
+        query = query.eq("category_id", activeCategoryId);
+      }
+
+      if (q) {
+        if (priceQuery) {
+          query = query.eq("price", Number(priceQuery));
+        } else {
+          query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%`);
+        }
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+        return;
+      }
+
+      const results = (data ?? []) as Product[];
+
+      if (reset) {
+        setProducts(results);
+        pageRef.current = 1;
+      } else {
+        setProducts((prev) => [...prev, ...results]);
+        pageRef.current = currentPage + 1;
+      }
+
+      const more = results.length === PAGE_SIZE;
+      hasMoreRef.current = more;
+      setHasMore(more);
+      loadingMoreRef.current = false;
+      setLoadingMore(false);
+    },
+    [offlineMode, debouncedSearch, activeCategoryId]
+  );
+
+  // ── Resetear productos cuando cambia el filtro ──────────────────────────
+  useEffect(() => {
+    if (!catalogLoaded || offlineMode) return;
+    setProducts([]);
+    loadingMoreRef.current = false;
+    hasMoreRef.current = true;
+    pageRef.current = 0;
+    setHasMore(true);
+    void fetchProducts(true);
+  }, [fetchProducts, catalogLoaded, offlineMode]);
+
+  // ── IntersectionObserver: cargar más al llegar al final ────────────────
+  // catalogLoaded está en deps para que el observer se recree cuando el
+  // sentinel aparece en el DOM (antes de que carguen los productos está null)
+  useEffect(() => {
+    if (!sentinelRef.current || offlineMode) return;
+    const sentinel = sentinelRef.current;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0].isIntersecting &&
+          hasMoreRef.current &&
+          !loadingMoreRef.current
+        ) {
+          void fetchProducts();
+        }
+      },
+      // rootMargin: empieza a cargar 200 px antes de llegar al fondo
+      { threshold: 0, rootMargin: "0px 0px 200px 0px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [fetchProducts, offlineMode, catalogLoaded]);
 
   // ── Sincronización de ventas pendientes al recuperar conexión ──────────
   useEffect(() => {
@@ -714,24 +828,26 @@ export default function SalePage() {
 
       {/* Header */}
       <header className="sticky top-0 z-20 bg-cream-50/95 backdrop-blur border-b border-cream-300">
-        <div className="px-4 py-3 flex items-center gap-3">
+        <div className="px-4 py-3 flex items-center">
           <Link
             href="/"
-            className="text-ink-muted hover:text-brand-darker"
+            className="text-sm text-ink-muted hover:text-brand-darker w-16 shrink-0"
             aria-label="Volver al inicio"
           >
-            ←
+            Salir
           </Link>
-          <Image
-            src="/logo.svg"
-            alt="PELGY"
-            width={70}
-            height={45}
-            className="h-7 w-auto"
-          />
+          <div className="flex-1 flex justify-center">
+            <Image
+              src="/logo.svg"
+              alt="PELGY"
+              width={90}
+              height={58}
+              className="h-9 w-auto"
+            />
+          </div>
           <button
             onClick={changeIdentifier}
-            className="text-sm text-ink-muted flex-1 text-right truncate hover:text-brand-darker"
+            className="text-sm text-ink-muted w-16 shrink-0 text-right truncate hover:text-brand-darker"
             title="Cambiar de vendedor"
           >
             {identifier}
@@ -784,21 +900,33 @@ export default function SalePage() {
       {/* Grid productos */}
       <section className="p-3">
         {/* Contador de resultados */}
-        {(search || activeCategoryId !== "ALL") && visibleProducts.length > 0 && (
+        {(search || activeCategoryId !== "ALL") && displayProducts.length > 0 && (
           <p className="text-xs text-ink-muted mb-2 px-1">
-            {visibleProducts.length} producto{visibleProducts.length !== 1 ? "s" : ""}
+            {displayProducts.length} producto{displayProducts.length !== 1 ? "s" : ""}
             {search ? ` para "${search}"` : ""}
           </p>
         )}
-        {visibleProducts.length === 0 ? (
+
+        {/* Cargando primera página */}
+        {loadingMore && displayProducts.length === 0 && (
+          <p className="font-serif italic text-center text-ink-muted py-16">
+            Cargando productos…
+          </p>
+        )}
+
+        {/* Sin resultados */}
+        {!loadingMore && displayProducts.length === 0 && (
           <p className="font-serif italic text-center text-ink-muted py-16">
             {search
               ? "No hay productos que coincidan con tu búsqueda."
               : "Esta categoría no tiene productos todavía."}
           </p>
-        ) : (
+        )}
+
+        {/* Grid */}
+        {displayProducts.length > 0 && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {visibleProducts.map((p) => (
+            {displayProducts.map((p) => (
               <button
                 key={p.id}
                 className="card p-3 text-left active:scale-[0.98] transition-all hover:border-brand/50 hover:shadow-md"
@@ -811,6 +939,8 @@ export default function SalePage() {
                       src={p.image_url}
                       alt={p.name}
                       className="w-full h-full object-cover"
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
                     />
                   ) : (
                     <span className="font-serif text-2xl text-brand-dark">
@@ -830,6 +960,24 @@ export default function SalePage() {
               </button>
             ))}
           </div>
+        )}
+
+        {/* Sentinel siempre presente (una vez catalogLoaded) para que
+            IntersectionObserver pueda observarlo desde el primer render */}
+        {!offlineMode && catalogLoaded && (
+          <>
+            <div ref={sentinelRef} className="h-8" />
+            {loadingMore && displayProducts.length > 0 && (
+              <p className="text-center py-4 text-ink-light text-sm font-serif italic">
+                Cargando más…
+              </p>
+            )}
+            {!hasMore && displayProducts.length > 0 && (
+              <p className="text-center py-4 text-ink-light text-xs">
+                — Fin del catálogo —
+              </p>
+            )}
+          </>
         )}
       </section>
 
