@@ -952,11 +952,13 @@ interface ImportResult {
 function ImportTab() {
   const [text, setText] = useState("");
   const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
 
   const runImport = async () => {
     setRunning(true);
     setResult(null);
+    setProgress("Procesando archivo…");
     const res: ImportResult = { created: 0, updated: 0, errors: [] };
 
     try {
@@ -996,23 +998,15 @@ function ImportTab() {
         return;
       }
 
-      // Cache de categorías existentes
-      const { data: existingCats } = await supabase
-        .from("categories")
-        .select("id, name");
-      const catMap = new Map<string, string>();
-      (existingCats ?? []).forEach((c) =>
-        catMap.set(c.name.toLowerCase(), c.id)
-      );
-
-      // Cache de productos existentes (por code)
-      const { data: existingProds } = await supabase
-        .from("products")
-        .select("id, code");
-      const prodMap = new Map<string, string>();
-      (existingProds ?? []).forEach((p) =>
-        prodMap.set(p.code, p.id)
-      );
+      // ── 1. Parsear todas las filas primero ───────────────────────────────
+      interface ParsedRow {
+        rowNum: number;
+        code: string;
+        name: string;
+        price: number;
+        categoryName: string;
+      }
+      const parsed: ParsedRow[] = [];
 
       for (let i = 1; i < lines.length; i++) {
         const cells = lines[i].split(sep).map(stripQuotes);
@@ -1020,7 +1014,7 @@ function ImportTab() {
         const name = cells[Number(idxName)]?.trim();
         const priceRaw = cells[Number(idxPrice)]?.trim().replace(/[^\d.,-]/g, "").replace(",", ".");
         const price = Number(priceRaw);
-        const categoryName = idxCategory !== undefined ? cells[Number(idxCategory)]?.trim() : "";
+        const categoryName = idxCategory !== undefined ? cells[Number(idxCategory)]?.trim() ?? "" : "";
 
         if (!code || !name || !Number.isFinite(price)) {
           res.errors.push({
@@ -1029,58 +1023,72 @@ function ImportTab() {
           });
           continue;
         }
+        parsed.push({ rowNum: i + 1, code, name, price, categoryName });
+      }
 
-        // Resolver categoría: crear si no existe
-        let category_id: string | null = null;
-        if (categoryName) {
-          const lookup = catMap.get(categoryName.toLowerCase());
-          if (lookup) {
-            category_id = lookup;
-          } else {
-            const { data: newCat, error: catErr } = await supabase
-              .from("categories")
-              .insert({ name: categoryName })
-              .select("id")
-              .single();
-            if (catErr || !newCat) {
-              res.errors.push({
-                row: i + 1,
-                reason: `No se pudo crear categoría "${categoryName}": ${catErr?.message ?? "error desconocido"}`,
-              });
-              continue;
-            }
-            category_id = newCat.id;
-            catMap.set(categoryName.toLowerCase(), newCat.id);
-          }
-        }
+      // ── 2. Resolver categorías (batch) ───────────────────────────────────
+      setProgress("Resolviendo categorías…");
+      const { data: existingCats } = await supabase
+        .from("categories")
+        .select("id, name");
+      const catMap = new Map<string, string>();
+      (existingCats ?? []).forEach((c) => catMap.set(c.name.toLowerCase(), c.id));
 
-        const payload = { code, name, price, category_id, active: true };
-        const existingId = prodMap.get(code);
-        if (existingId) {
-          const { error } = await supabase
-            .from("products")
-            .update(payload)
-            .eq("id", existingId);
-          if (error) {
-            res.errors.push({ row: i + 1, reason: error.message });
-          } else {
-            res.updated += 1;
-          }
+      // Nuevas categorías únicas no existentes
+      const newCatNames = [
+        ...new Set(
+          parsed
+            .map((r) => r.categoryName)
+            .filter((n) => n && !catMap.has(n.toLowerCase()))
+        ),
+      ];
+
+      if (newCatNames.length > 0) {
+        const { data: created, error: catErr } = await supabase
+          .from("categories")
+          .insert(newCatNames.map((name) => ({ name })))
+          .select("id, name");
+        if (catErr) {
+          res.errors.push({ row: 0, reason: `Error creando categorías: ${catErr.message}` });
         } else {
-          const { error, data } = await supabase
-            .from("products")
-            .insert(payload)
-            .select("id")
-            .single();
-          if (error) {
-            res.errors.push({ row: i + 1, reason: error.message });
-          } else {
-            res.created += 1;
-            if (data) prodMap.set(code, data.id);
-          }
+          (created ?? []).forEach((c) => catMap.set(c.name.toLowerCase(), c.id));
+        }
+      }
+
+      // ── 3. Construir payloads para upsert ────────────────────────────────
+      const payloads = parsed.map((r) => ({
+        code: r.code,
+        name: r.name,
+        price: r.price,
+        category_id: catMap.get(r.categoryName.toLowerCase()) ?? null,
+        active: true,
+      }));
+
+      // ── 4. Detectar nuevos vs existentes para el contador ───────────────
+      const { data: existingProds } = await supabase
+        .from("products")
+        .select("code");
+      const existingCodes = new Set((existingProds ?? []).map((p) => p.code));
+
+      // ── 5. Upsert en lotes de 100 ────────────────────────────────────────
+      const CHUNK = 100;
+      for (let start = 0; start < payloads.length; start += CHUNK) {
+        const chunk = payloads.slice(start, start + CHUNK);
+        setProgress(`Importando ${start + 1}–${Math.min(start + CHUNK, payloads.length)} de ${payloads.length}…`);
+        const { error } = await supabase
+          .from("products")
+          .upsert(chunk, { onConflict: "code" });
+        if (error) {
+          res.errors.push({ row: start + 2, reason: `Lote ${start / CHUNK + 1}: ${error.message}` });
+        } else {
+          chunk.forEach((p) => {
+            if (existingCodes.has(p.code)) res.updated += 1;
+            else res.created += 1;
+          });
         }
       }
     } finally {
+      setProgress("");
       setRunning(false);
       setResult(res);
     }
@@ -1102,6 +1110,29 @@ function ImportTab() {
         existe, se actualiza.
       </p>
 
+      <div className="flex items-center gap-3 mb-2">
+        <label className="btn-secondary text-xs py-1.5 px-3 cursor-pointer">
+          📂 Cargar archivo CSV
+          <input
+            type="file"
+            accept=".csv,.tsv,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => setText(ev.target?.result as string ?? "");
+              reader.readAsText(file, "utf-8");
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {text && (
+          <span className="text-xs text-ink-muted">
+            {text.split(/\r?\n/).filter(Boolean).length - 1} filas cargadas
+          </span>
+        )}
+      </div>
       <textarea
         className="input min-h-[240px] font-mono text-xs"
         placeholder={`codigo,nombre,precio,categoria\nL-A,Letra A,5000,Letras\nL-B,Letra B,5000,Letras`}
@@ -1116,6 +1147,9 @@ function ImportTab() {
       >
         {running ? "Importando..." : "Importar"}
       </button>
+      {progress && (
+        <p className="text-sm text-ink-muted mt-2 italic">{progress}</p>
+      )}
 
       {result && (
         <div className="card p-4 mt-4">
