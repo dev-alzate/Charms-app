@@ -32,6 +32,7 @@ const BUSINESS_NAME = process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "PELGY";
 const LS_IDENTIFIER = "charms_identifier_name";
 
 type View = "grid" | "checkout" | "success";
+type PriceFilter = "all" | "low" | "mid" | "high";
 
 export default function SalePage() {
   // ── Identificación del vendedor ─────────────────────────────────────────
@@ -59,6 +60,7 @@ export default function SalePage() {
   // ── Estado del flujo de venta ───────────────────────────────────────────
   const [activeCategoryId, setActiveCategoryId] = useState<string | "ALL">("ALL");
   const [search, setSearch] = useState("");
+  const [priceFilter, setPriceFilter] = useState<PriceFilter>("all");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [view, setView] = useState<View>("grid");
   const [payment, setPayment] = useState<PaymentMethod | null>(null);
@@ -165,20 +167,44 @@ export default function SalePage() {
     };
   }, [identifierReady]);
 
-  // ── Productos visibles según tab + búsqueda ─────────────────────────────
+  // ── Productos visibles según tab + búsqueda + filtro de precio ──────────
   const visibleProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
+
+    // Mapa categoryId → nombre para buscar también por categoría
+    const catNameMap = new Map(
+      categories.map((c) => [c.id, c.name.toLowerCase()])
+    );
+
+    // Si el usuario escribe solo dígitos (≥3), buscar por precio exacto
+    const priceExact = /^\d{3,}$/.test(q) ? Number(q) : NaN;
+
     return products.filter((p) => {
+      // ── Filtro de categoría (tab) ─────────────────────────────────────
       const matchesCategory =
-        q.length > 0 || activeCategoryId === "ALL"
-          ? true
-          : p.category_id === activeCategoryId;
-      const matchesSearch = q
-        ? p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
-        : true;
-      return matchesCategory && matchesSearch;
+        activeCategoryId === "ALL" || p.category_id === activeCategoryId;
+
+      // ── Filtro de búsqueda de texto ───────────────────────────────────
+      const matchesSearch =
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.code.toLowerCase().includes(q) ||
+        (p.category_id
+          ? (catNameMap.get(p.category_id) ?? "").includes(q)
+          : false) ||
+        (!isNaN(priceExact) && Number(p.price) === priceExact);
+
+      // ── Filtro de rango de precio ─────────────────────────────────────
+      const price = Number(p.price);
+      const matchesPriceRange =
+        priceFilter === "all" ||
+        (priceFilter === "low" && price <= 3000) ||
+        (priceFilter === "mid" && price > 3000 && price <= 6000) ||
+        (priceFilter === "high" && price > 6000);
+
+      return matchesCategory && matchesSearch && matchesPriceRange;
     });
-  }, [products, activeCategoryId, search]);
+  }, [products, categories, activeCategoryId, search, priceFilter]);
 
   // ── Totales del carrito ─────────────────────────────────────────────────
   const cartTotal = useMemo(
@@ -241,6 +267,7 @@ export default function SalePage() {
     setSubmitError(null);
     setSearch("");
     setActiveCategoryId("ALL");
+    setPriceFilter("all");
     setView("grid");
   }, []);
 
@@ -720,14 +747,51 @@ export default function SalePage() {
             {identifier}
           </button>
         </div>
-        <div className="px-4 pb-3">
-          <input
-            className="input"
-            type="search"
-            placeholder="Buscar por nombre o código…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="px-4 pb-2">
+          <div className="relative">
+            <input
+              className="input pr-8"
+              type="search"
+              placeholder="Buscar por nombre, código, categoría o precio…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            {search && (
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+                onClick={() => setSearch("")}
+                aria-label="Limpiar búsqueda"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Filtros de precio */}
+        <div className="overflow-x-auto scroll-x-hidden">
+          <div className="flex gap-2 px-4 pb-2 min-w-max">
+            {(
+              [
+                { key: "all",  label: "Todos los precios" },
+                { key: "low",  label: "≤ $3.000" },
+                { key: "mid",  label: "$3.001 – $6.000" },
+                { key: "high", label: "+ $6.000" },
+              ] as { key: PriceFilter; label: string }[]
+            ).map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setPriceFilter(key)}
+                className={`px-3 py-1 rounded-full text-xs whitespace-nowrap border transition-all ${
+                  priceFilter === key
+                    ? "bg-brand text-white border-brand"
+                    : "text-ink-muted bg-white border-cream-300 hover:border-brand"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Tabs categorías */}
@@ -754,6 +818,13 @@ export default function SalePage() {
 
       {/* Grid productos */}
       <section className="p-3">
+        {/* Contador de resultados */}
+        {(search || priceFilter !== "all" || activeCategoryId !== "ALL") && visibleProducts.length > 0 && (
+          <p className="text-xs text-ink-muted mb-2 px-1">
+            {visibleProducts.length} producto{visibleProducts.length !== 1 ? "s" : ""}
+            {search ? ` para "${search}"` : ""}
+          </p>
+        )}
         {visibleProducts.length === 0 ? (
           <p className="font-serif italic text-center text-ink-muted py-16">
             {search
