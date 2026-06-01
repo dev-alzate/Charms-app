@@ -73,14 +73,17 @@ function getBestImage(images) {
 function getCategory(categories) {
   if (!categories || categories.length === 0) return "";
   // Priorizar la categoría más específica (hoja del árbol)
-  // Filtrar categorías genéricas
+  // Filtrar categorías genéricas y las puramente numéricas (ej. categorías de precio "3000")
   const skip = ["dijes", "charms", "insumos para bisutería", "lo ultimo", "nuevo", "tendencia",
     "diy para bisutería", "pelgy bisuteria"];
   const specific = categories.filter(c =>
-    !skip.some(s => c.name.toLowerCase().includes(s))
+    !skip.some(s => c.name.toLowerCase().includes(s)) &&
+    !/^\d+$/.test(c.name.trim())   // descartar nombres solo numéricos
   );
   if (specific.length > 0) return specific[0].name;
-  return categories[0].name;
+  // Fallback: usar la primera que no sea numérica
+  const nonNumeric = categories.find(c => !/^\d+$/.test(c.name.trim()));
+  return nonNumeric ? nonNumeric.name : categories[0].name;
 }
 
 // ─── Fetch con reintentos ───────────────────────────────────────────────────
