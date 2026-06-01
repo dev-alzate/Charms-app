@@ -46,6 +46,15 @@ export default function HomePage() {
           Sistema de feria
         </p>
       </div>
+
+      <footer className="mt-auto pt-8 pb-6 text-center">
+        <p className="font-serif text-brand-darker/70 text-sm mb-1">
+          PELGY Bisutería
+        </p>
+        <p className="text-xs text-ink-light/60">
+          © {new Date().getFullYear()} Todos los derechos reservados
+        </p>
+      </footer>
     </main>
   );
 }
