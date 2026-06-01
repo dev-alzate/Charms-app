@@ -177,7 +177,8 @@ export default function SalePage() {
     );
 
     // Si el usuario escribe solo dígitos (≥3), buscar por precio exacto
-    const priceExact = /^\d{3,}$/.test(q) ? Number(q) : NaN;
+    // Usamos string compare para evitar cualquier problema de precisión numérica
+    const priceQuery = /^\d{3,}$/.test(q) ? q : null;
 
     return products.filter((p) => {
       // ── Filtro de categoría (tab) ─────────────────────────────────────
@@ -192,7 +193,7 @@ export default function SalePage() {
         (p.category_id
           ? (catNameMap.get(p.category_id) ?? "").includes(q)
           : false) ||
-        (!isNaN(priceExact) && Number(p.price) === priceExact);
+        (priceQuery !== null && String(Math.round(Number(p.price))) === priceQuery);
 
       // ── Filtro de rango de precio ─────────────────────────────────────
       const price = Number(p.price);
