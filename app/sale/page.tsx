@@ -78,6 +78,7 @@ export default function SalePage() {
   const [customerPhone, setCustomerPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paymentWarning, setPaymentWarning] = useState(false);
   const [completedSale, setCompletedSale] = useState<Sale | null>(null);
   const [totalCount, setTotalCount] = useState<number | null>(null);
 
@@ -273,6 +274,7 @@ export default function SalePage() {
   const resetForNextCustomer = useCallback(() => {
     setCart([]);
     setPayment(null);
+    setPaymentWarning(false);
     setCustomerName("");
     setCustomerPhone("");
     setCompletedSale(null);
@@ -352,17 +354,6 @@ export default function SalePage() {
     if (!completedSale) return;
     downloadInvoice(completedSale);
   }, [completedSale]);
-
-  // ── Auto-seleccionar el primer método de pago al cargar ────────────────
-  useEffect(() => {
-    if (paymentMethods.length === 0) return;
-    setPayment((prev) => {
-      // Si ya hay uno seleccionado y sigue activo, no tocarlo
-      if (prev && paymentMethods.some((m) => m.key === prev)) return prev;
-      // Si no hay ninguno (o el que había ya no existe), elegir el primero
-      return paymentMethods[0].key as PaymentMethod;
-    });
-  }, [paymentMethods]);
 
   // ── Debounce de búsqueda (300 ms) ──────────────────────────────────────
   useEffect(() => {
@@ -1106,11 +1097,7 @@ export default function SalePage() {
                     {paymentMethods.map((m) => (
                       <button
                         key={m.key}
-                        onClick={() =>
-                          setPayment(
-                            payment === (m.key as PaymentMethod) ? null : (m.key as PaymentMethod)
-                          )
-                        }
+                        onClick={() => { setPayment(m.key as PaymentMethod); setPaymentWarning(false); }}
                         className={`flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl border text-xs font-medium transition-all ${
                           payment === m.key
                             ? "bg-brand border-brand text-white"
@@ -1124,9 +1111,17 @@ export default function SalePage() {
                   </div>
                 </div>
               )}
+              {paymentWarning && (
+                <p className="text-xs text-red-600 text-center mb-2 font-medium">
+                  Por favor selecciona un método de pago
+                </p>
+              )}
               <button
                 className="btn-confirm w-full py-5 flex items-center justify-between px-6"
-                onClick={() => setView("checkout")}
+                onClick={() => {
+                  if (!payment) { setPaymentWarning(true); return; }
+                  setView("checkout");
+                }}
               >
                 <span>Cobrar</span>
                 <span className="font-serif text-lg">{formatCurrency(cartTotal)}</span>
@@ -1251,13 +1246,7 @@ export default function SalePage() {
                 {paymentMethods.map((m) => (
                   <button
                     key={m.key}
-                    onClick={() =>
-                      setPayment(
-                        payment === (m.key as PaymentMethod)
-                          ? null
-                          : (m.key as PaymentMethod)
-                      )
-                    }
+                    onClick={() => { setPayment(m.key as PaymentMethod); setPaymentWarning(false); }}
                     className={`flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl border text-xs font-medium transition-all ${
                       payment === m.key
                         ? "bg-brand border-brand text-white"
@@ -1274,10 +1263,20 @@ export default function SalePage() {
             </>
           )}
 
+          {/* Advertencia método de pago */}
+          {paymentWarning && (
+            <p className="text-xs text-red-600 text-center mb-2 font-medium">
+              Por favor selecciona un método de pago
+            </p>
+          )}
+
           {/* Botón cobrar */}
           <button
             className="btn-confirm w-full py-4 flex items-center justify-between px-5 disabled:opacity-40 disabled:cursor-not-allowed"
-            onClick={() => setView("checkout")}
+            onClick={() => {
+              if (!payment) { setPaymentWarning(true); return; }
+              setView("checkout");
+            }}
             disabled={cart.length === 0}
           >
             <span className="font-medium">Cobrar</span>
