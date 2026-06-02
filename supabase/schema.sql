@@ -1,15 +1,3 @@
--- =============================================================================
--- Charms App — Schema completo
---
--- Cómo usar:
---   1. Crea un proyecto en Supabase (https://supabase.com).
---   2. Abre SQL Editor.
---   3. Pega TODO este archivo y dale "Run".
---   4. Verifica en "Table Editor" que aparezcan: categories, products, sales, settings.
---
--- Es seguro re-ejecutarlo: usa IF NOT EXISTS y ON CONFLICT donde aplica.
--- =============================================================================
-
 -- Para gen_random_uuid()
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -32,11 +20,15 @@ CREATE TABLE IF NOT EXISTS products (
   name          text NOT NULL,
   price         numeric(12, 2) NOT NULL CHECK (price >= 0),
   category_id   uuid REFERENCES categories(id) ON DELETE SET NULL,
+  image_url     text,
   active        boolean NOT NULL DEFAULT true,
   display_order int NOT NULL DEFAULT 0,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
+
+-- Migración para bases existentes (sin efecto si la columna ya existe)
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url text;
 
 CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_active   ON products(active);
@@ -62,6 +54,22 @@ CREATE TABLE IF NOT EXISTS settings (
   key        text PRIMARY KEY,
   value      text,
   updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sellers (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name       text NOT NULL,
+  code       text NOT NULL UNIQUE,
+  active     boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  key           text NOT NULL UNIQUE,
+  label         text NOT NULL,
+  active        boolean NOT NULL DEFAULT true,
+  display_order int NOT NULL DEFAULT 0
 );
 
 -- =============================================================================
@@ -158,6 +166,8 @@ ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products   ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sellers         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_methods ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS p_all_categories ON categories;
 CREATE POLICY p_all_categories ON categories FOR ALL USING (true) WITH CHECK (true);
@@ -171,15 +181,26 @@ CREATE POLICY p_all_sales ON sales FOR ALL USING (true) WITH CHECK (true);
 DROP POLICY IF EXISTS p_all_settings ON settings;
 CREATE POLICY p_all_settings ON settings FOR ALL USING (true) WITH CHECK (true);
 
--- =============================================================================
--- DATOS DE MUESTRA
---
--- Sirven para probar el sistema antes de cargar el catálogo real desde Excel.
--- Reemplázalos importando tu CSV desde /admin → Tab "Importar".
--- =============================================================================
+DROP POLICY IF EXISTS p_all_sellers ON sellers;
+CREATE POLICY p_all_sellers ON sellers FOR ALL USING (true) WITH CHECK (true);
 
-INSERT INTO settings (key, value) VALUES ('armador_whatsapp', '')
+DROP POLICY IF EXISTS p_all_payment_methods ON payment_methods;
+CREATE POLICY p_all_payment_methods ON payment_methods FOR ALL USING (true) WITH CHECK (true);
+
+
+
+INSERT INTO settings (key, value) VALUES ('require_seller_login', 'false')
 ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO payment_methods (key, label, active, display_order) VALUES
+  ('cash',     'Efectivo',      true, 1),
+  ('transfer', 'Transferencia', true, 2),
+  ('card',     'Datafono',      true, 3)
+ON CONFLICT (key) DO NOTHING;
+
+ALTER TABLE sales DROP CONSTRAINT IF EXISTS sales_payment_method_check;
+ALTER TABLE sales ADD CONSTRAINT sales_payment_method_check
+  CHECK (payment_method IN ('cash', 'transfer', 'card'));
 
 INSERT INTO categories (name, display_order, color, active) VALUES
   ('Cadenas',    1, '#9333EA', true),

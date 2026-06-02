@@ -1,136 +1,600 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Category,
   PAYMENT_LABELS,
+  PaymentMethodConfig,
   Product,
   Sale,
+  Seller,
   supabase,
 } from "@/lib/supabase";
 import { formatCurrency, formatDate } from "@/lib/format";
 
-type TabKey = "config" | "products" | "categories" | "sales" | "import";
+// ═════════════════════════════════════════════════════════════════════════════
+// Iconos SVG
+// ═════════════════════════════════════════════════════════════════════════════
 
-const TABS: { key: TabKey; label: string }[] = [
-  { key: "config", label: "Configuración" },
-  { key: "products", label: "Productos" },
-  { key: "categories", label: "Categorías" },
-  { key: "sales", label: "Ventas" },
-  { key: "import", label: "Importar" },
-];
-
-export default function AdminPage() {
-  const [tab, setTab] = useState<TabKey>("config");
-
+function IconHome() {
   return (
-    <main className="min-h-screen bg-cream-100">
-      <header className="sticky top-0 z-10 bg-cream-50/95 backdrop-blur border-b border-cream-300">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link
-            href="/"
-            className="text-ink-muted text-sm hover:text-brand-darker"
-          >
-            ← Inicio
-          </Link>
-          <h1 className="font-serif text-xl tracking-wide text-ink">
-            Administración
-          </h1>
-        </div>
-        <nav className="overflow-x-auto scroll-x-hidden border-t border-cream-300/60">
-          <div className="max-w-5xl mx-auto flex gap-1 px-2 min-w-max">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`px-5 py-3 text-sm whitespace-nowrap border-b-2 tracking-wide transition-colors ${
-                  tab === t.key
-                    ? "border-brand text-brand-darker"
-                    : "border-transparent text-ink-muted hover:text-ink"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </nav>
-      </header>
-
-      <section className="max-w-5xl mx-auto p-4">
-        {tab === "config" && <ConfigTab />}
-        {tab === "products" && <ProductsTab />}
-        {tab === "categories" && <CategoriesTab />}
-        {tab === "sales" && <SalesTab />}
-        {tab === "import" && <ImportTab />}
-      </section>
-    </main>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+  );
+}
+function IconGear() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  );
+}
+function IconBox() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </svg>
+  );
+}
+function IconTag() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+      <line x1="7" y1="7" x2="7.01" y2="7"/>
+    </svg>
+  );
+}
+function IconChart() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+    </svg>
+  );
+}
+function IconUpload() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+  );
+}
+function IconUsers() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  );
+}
+function IconLogout() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
+  );
+}
+function IconStore() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+    </svg>
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// Configuración del sidebar
+// ═════════════════════════════════════════════════════════════════════════════
+
+type TabKey = "home" | "config" | "products" | "categories" | "sales" | "import" | "sellers";
+
+interface TabMeta {
+  key: TabKey;
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+}
+
+const TABS: TabMeta[] = [
+  { key: "home",       label: "Inicio",         description: "Bienvenido al panel de administración PELGY.",                         icon: <IconHome /> },
+  { key: "config",     label: "Configuración",  description: "Personaliza los métodos de pago y el acceso de vendedores.",          icon: <IconGear /> },
+  { key: "products",   label: "Productos",      description: "Gestiona el catálogo de productos de la tienda.",                     icon: <IconBox /> },
+  { key: "categories", label: "Categorías",     description: "Organiza los productos por categorías.",                              icon: <IconTag /> },
+  { key: "sales",      label: "Ventas",         description: "Consulta las ventas registradas y el resumen del día.",               icon: <IconChart /> },
+  { key: "import",     label: "Importar",       description: "Carga productos desde un archivo CSV.",                               icon: <IconUpload /> },
+  { key: "sellers",    label: "Vendedores",     description: "Administra los vendedores que atienden en feria.",                    icon: <IconUsers /> },
+];
+
+const SIDEBAR_BG = "#2C1A0E";
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Página principal
+// ═════════════════════════════════════════════════════════════════════════════
+
+export default function AdminPage() {
+  const [tab, setTab] = useState<TabKey>("home");
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Auto-collapse on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) setCollapsed(true);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const current = TABS.find((t) => t.key === tab)!;
+
+  return (
+    <div className="flex min-h-screen relative">
+      {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+      {/* Backdrop móvil */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={`flex flex-col flex-shrink-0 transition-all duration-200
+          fixed md:relative inset-y-0 left-0 z-50 md:z-auto
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+        style={{ backgroundColor: SIDEBAR_BG, width: collapsed ? 64 : 256 }}
+      >
+        {/* Branding + colapsar */}
+        <div
+          className={`flex items-center py-5 px-4 ${collapsed ? "justify-center" : "justify-between"}`}
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+        >
+          {!collapsed && (
+            <div>
+              <p className="font-serif text-white text-lg tracking-wide leading-none">
+                PELGY
+              </p>
+              <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.45)" }}>
+                Panel POS
+              </p>
+            </div>
+          )}
+          <button
+            onClick={() => {
+              if (window.innerWidth < 768) setMobileOpen(false);
+              else setCollapsed(!collapsed);
+            }}
+            className="p-1.5 rounded-lg transition-colors hover:bg-white/10"
+            style={{ color: "rgba(255,255,255,0.5)" }}
+            aria-label={collapsed ? "Expandir menú" : "Colapsar menú"}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {collapsed
+                ? <polyline points="9 18 15 12 9 6" />
+                : <polyline points="15 18 9 12 15 6" />}
+            </svg>
+          </button>
+        </div>
+
+        {/* Navegación principal */}
+        <nav className="flex-1 py-4 px-2 overflow-y-auto">
+          {!collapsed && (
+            <p
+              className="text-xs uppercase tracking-widest px-3 mb-2"
+              style={{ color: "rgba(255,255,255,0.35)" }}
+            >
+              MENÚ
+            </p>
+          )}
+          <div className="space-y-0.5">
+            {TABS.map((t) => {
+              const active = tab === t.key;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => { setTab(t.key); setMobileOpen(false); }}
+                  title={collapsed ? t.label : undefined}
+                  className={`flex items-center w-full rounded-lg text-sm transition-all ${
+                    collapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-2.5"
+                  }`}
+                  style={{
+                    backgroundColor: active ? "rgba(255,255,255,0.13)" : "transparent",
+                    color: active ? "white" : "rgba(255,255,255,0.55)",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active)
+                      (e.currentTarget as HTMLButtonElement).style.color = "white";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active)
+                      (e.currentTarget as HTMLButtonElement).style.color =
+                        "rgba(255,255,255,0.55)";
+                  }}
+                >
+                  <span className="w-5 h-5 flex-shrink-0">{t.icon}</span>
+                  {!collapsed && (
+                    <>
+                      <span className="flex-1 text-left">{t.label}</span>
+                      {active && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: "rgba(255,255,255,0.8)" }}
+                        />
+                      )}
+                    </>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        {/* Zona inferior */}
+        <div
+          className="py-3 px-2 space-y-0.5"
+          style={{ borderTop: "1px solid rgba(255,255,255,0.1)" }}
+        >
+          {[
+            {
+              label: "Inicio",
+              icon: <IconStore />,
+              action: null as null,
+              href: "/" as string,
+            },
+          ].map(() => (
+            <Link
+              key="store"
+              href="/"
+              title={collapsed ? "Ir a la tienda" : undefined}
+              className={`flex items-center w-full rounded-lg text-sm transition-all ${
+                collapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-2.5"
+              }`}
+              style={{ color: "rgba(255,255,255,0.55)" }}
+            >
+              <span className="w-5 h-5 flex-shrink-0">
+                <IconStore />
+              </span>
+              {!collapsed && <span>Inicio</span>}
+            </Link>
+          ))}
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            title={collapsed ? "Cerrar sesión" : undefined}
+            className={`flex items-center w-full rounded-lg text-sm transition-all ${
+              collapsed ? "justify-center px-0 py-3" : "gap-3 px-3 py-2.5"
+            }`}
+            style={{ color: "rgba(255,255,255,0.55)" }}
+          >
+            <span className="w-5 h-5 flex-shrink-0">
+              <IconLogout />
+            </span>
+            {!collapsed && <span>Cerrar sesión</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* ── Contenido ───────────────────────────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-auto bg-cream-100">
+        {/* Cabecera de sección */}
+        <div className="bg-cream-50 border-b border-cream-300 px-4 md:px-8 py-4 md:py-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            {/* Botón hamburguesa — solo móvil */}
+            <button
+              className="md:hidden p-2 rounded-lg text-ink-muted hover:text-ink hover:bg-cream-200 transition-colors flex-shrink-0"
+              onClick={() => setMobileOpen(true)}
+              aria-label="Abrir menú"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-cream-200 flex items-center justify-center text-brand-darker flex-shrink-0">
+              {current.icon}
+            </div>
+            <div>
+              <h1 className="font-serif text-xl md:text-2xl text-ink leading-tight">
+                {current.label}
+              </h1>
+              <p className="text-xs md:text-sm text-ink-muted mt-0.5">{current.description}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Contenido del tab */}
+        <section className="flex-1 p-4 md:p-8">
+          {tab === "home"       && <HomeTab onNavigate={setTab} />}
+          {tab === "config"     && <ConfigTab />}
+          {tab === "products"   && <ProductsTab />}
+          {tab === "categories" && <CategoriesTab />}
+          {tab === "sales"      && <SalesTab />}
+          {tab === "import"     && <ImportTab />}
+          {tab === "sellers"    && <SellersTab />}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Tab: Inicio (bienvenida)
+// ═════════════════════════════════════════════════════════════════════════════
+
+function HomeTab({ onNavigate }: { onNavigate: (tab: TabKey) => void }) {
+  const shortcuts = TABS.filter((t) => t.key !== "home");
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[55vh] text-center">
+      <Image
+        src="/logo.svg"
+        alt="PELGY"
+        width={200}
+        height={120}
+        className="w-44 h-auto mb-6 opacity-90"
+        priority
+      />
+      <div className="divider-ornament mb-5">
+        <span className="font-serif italic text-sm">Panel de administración</span>
+      </div>
+      <h2 className="font-serif text-2xl text-ink mb-3">
+        Bienvenido, gestiona tu aplicación
+      </h2>
+      <p className="text-sm text-ink-muted max-w-sm mb-10">
+        Configura métodos de pago, administra el catálogo de productos,
+        revisa el historial de ventas y mucho más.
+      </p>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-lg">
+        {shortcuts.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => onNavigate(t.key)}
+            className="card p-4 text-left hover:border-brand/50 hover:shadow-md transition-all active:scale-[0.98]"
+          >
+            <span className="text-brand-darker mb-2 block">{t.icon}</span>
+            <p className="text-sm font-medium text-ink">{t.label}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
 // Tab: Configuración
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+
+const PM_META: Record<string, { description: string; icon: React.ReactNode }> = {
+  cash: {
+    description: "Pagos en efectivo en caja",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/>
+        <path d="M6 12h.01M18 12h.01"/>
+      </svg>
+    ),
+  },
+  transfer: {
+    description: "Transferencias bancarias y PSE",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+        <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+      </svg>
+    ),
+  },
+  card: {
+    description: "Tarjetas débito y crédito",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+        <line x1="1" y1="10" x2="23" y2="10"/>
+      </svg>
+    ),
+  },
+};
+
+function Toggle({
+  on,
+  disabled,
+  onChange,
+}: {
+  on: boolean;
+  disabled?: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <button
+      role="switch"
+      aria-checked={on}
+      onClick={onChange}
+      disabled={disabled}
+      className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 overflow-hidden ${
+        disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+      } ${on ? "bg-brand" : "bg-cream-300"}`}
+    >
+      <span
+        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+          on ? "translate-x-[22px]" : "translate-x-0.5"
+        }`}
+      />
+    </button>
+  );
+}
 
 function ConfigTab() {
-  const [armadorPhone, setArmadorPhone] = useState("");
+  const [requireSellerLogin, setRequireSellerLogin] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [savingSellerLogin, setSavingSellerLogin] = useState(false);
+  const [savingPm, setSavingPm] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
-      const { data, error } = await supabase
-        .from("settings")
-        .select("*")
-        .eq("key", "armador_whatsapp")
-        .maybeSingle();
-      if (!error) setArmadorPhone(data?.value ?? "");
-      setLoading(false);
+      try {
+        const [settingRes, pmRes] = await Promise.all([
+          supabase
+            .from("settings")
+            .select("value")
+            .eq("key", "require_seller_login")
+            .maybeSingle(),
+          supabase
+            .from("payment_methods")
+            .select("*")
+            .order("display_order", { ascending: true }),
+        ]);
+        setRequireSellerLogin(settingRes.data?.value === "true");
+        setPaymentMethods((pmRes.data ?? []) as PaymentMethodConfig[]);
+      } catch {
+        // tabla aún no creada
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
-  const save = async () => {
-    setSaving(true);
-    setMsg(null);
-    const { error } = await supabase
+  const saveSellerLogin = async (val: boolean) => {
+    setSavingSellerLogin(true);
+    await supabase
       .from("settings")
-      .upsert({ key: "armador_whatsapp", value: armadorPhone.trim() });
-    setSaving(false);
-    setMsg(error ? `Error: ${error.message}` : "Guardado correctamente");
+      .upsert({ key: "require_seller_login", value: val ? "true" : "false" });
+    setSavingSellerLogin(false);
+    setRequireSellerLogin(val);
+  };
+
+  const togglePaymentMethod = async (pm: PaymentMethodConfig) => {
+    setSavingPm(pm.key);
+    await supabase
+      .from("payment_methods")
+      .update({ active: !pm.active })
+      .eq("id", pm.id);
+    setPaymentMethods((prev) =>
+      prev.map((m) => (m.id === pm.id ? { ...m, active: !m.active } : m))
+    );
+    setSavingPm(null);
   };
 
   if (loading)
     return <p className="font-serif italic text-ink-muted">Cargando…</p>;
 
+  const activeCount = paymentMethods.filter((m) => m.active).length;
+
   return (
-    <div className="card p-5 max-w-lg">
-      <h2 className="display-md mb-2">WhatsApp del armador</h2>
-      <p className="text-sm text-ink-muted mb-4">
-        Número del celular al que se enviarán los pedidos para ensamblar.
-        Formato: con código de país, sin espacios. Ej: <code>573001234567</code>
-      </p>
-      <input
-        className="input mb-4"
-        type="tel"
-        inputMode="numeric"
-        placeholder="573001234567"
-        value={armadorPhone}
-        onChange={(e) => setArmadorPhone(e.target.value)}
-      />
-      <button className="btn-primary" onClick={save} disabled={saving}>
-        {saving ? "Guardando..." : "Guardar"}
-      </button>
-      {msg && (
-        <p className="text-sm mt-3 text-brand-darker italic">{msg}</p>
-      )}
+    <div className="flex flex-col gap-6 max-w-lg">
+      {/* Métodos de pago */}
+      <div className="card p-5">
+        <div className="flex items-start justify-between mb-2">
+          <h2 className="display-md">Métodos de pago</h2>
+          <span className="text-center leading-tight px-3 py-1.5 rounded-xl bg-cream-200 text-xs font-semibold text-ink-muted tracking-widest">
+            {activeCount}<br />ACTIVOS
+          </span>
+        </div>
+        <p className="text-sm text-ink-muted mb-5">
+          Activa los métodos que aparecen en la pantalla de venta. Al menos
+          uno debe quedar activo.
+        </p>
+        <div className="flex flex-col gap-3">
+          {paymentMethods.map((pm) => {
+            const meta = PM_META[pm.key];
+            const isLastActive = pm.active && activeCount === 1;
+            const isSaving = savingPm === pm.key;
+            return (
+              <div
+                key={pm.id}
+                className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${
+                  pm.active ? "bg-cream-100" : "bg-cream-50"
+                }`}
+              >
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors"
+                  style={{
+                    backgroundColor: pm.active ? SIDEBAR_BG : "#c4b5a5",
+                    color: "white",
+                  }}
+                >
+                  {meta?.icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${pm.active ? "text-ink" : "text-ink-muted"}`}>
+                    {pm.label}
+                  </p>
+                  <p className="text-xs text-ink-light mt-0.5">
+                    {meta?.description ?? ""}
+                  </p>
+                </div>
+                {isSaving ? (
+                  <span className="text-xs text-ink-light italic">Guardando…</span>
+                ) : (
+                  <Toggle
+                    on={pm.active}
+                    disabled={isLastActive}
+                    onChange={() => !isLastActive && togglePaymentMethod(pm)}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Login de vendedores */}
+      <div className="card p-5">
+        <h2 className="display-md mb-2">Login de vendedores</h2>
+        <p className="text-sm text-ink-muted mb-5">
+          Cuando está activo, los vendedores deben ingresar su nombre y código
+          al iniciar turno en la pantalla de venta. Gestiona los vendedores en
+          la sección <strong>Vendedores</strong>.
+        </p>
+        <div className="flex items-center gap-4 p-3 rounded-xl bg-cream-100">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{
+              backgroundColor: requireSellerLogin ? SIDEBAR_BG : "#c4b5a5",
+              color: "white",
+            }}
+          >
+            <IconUsers />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-ink">
+              Requerir login de vendedor
+            </p>
+            <p className="text-xs text-ink-light mt-0.5">
+              Solicita identificación al iniciar turno
+            </p>
+          </div>
+          {savingSellerLogin ? (
+            <span className="text-xs text-ink-light italic">Guardando…</span>
+          ) : (
+            <Toggle
+              on={requireSellerLogin}
+              onChange={() => saveSellerLogin(!requireSellerLogin)}
+            />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // Tab: Productos
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 function ProductsTab() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -253,9 +717,7 @@ function ProductsTab() {
                         {cat.name}
                       </span>
                     ) : (
-                      <span className="text-ink-light text-xs">
-                        Sin categoría
-                      </span>
+                      <span className="text-ink-light text-xs">Sin categoría</span>
                     )}
                   </td>
                   <td className="p-3">
@@ -280,10 +742,7 @@ function ProductsTab() {
                     >
                       Editar
                     </button>
-                    <button
-                      className="text-red-700"
-                      onClick={() => remove(p)}
-                    >
+                    <button className="text-red-700" onClick={() => remove(p)}>
                       Eliminar
                     </button>
                   </td>
@@ -325,21 +784,70 @@ function ProductForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(
+    product?.image_url ?? null
+  );
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const removeImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
   const save = async () => {
     setSaving(true);
     setError(null);
+
+    let image_url = product?.image_url ?? null;
+
+    if (imageFile) {
+      setUploadingImage(true);
+      const ext = imageFile.name.split(".").pop() ?? "jpg";
+      const path = `products/${code.trim() || Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("product-images")
+        .upload(path, imageFile, { upsert: true });
+
+      if (uploadError) {
+        setError(`Error al subir imagen: ${uploadError.message}`);
+        setSaving(false);
+        setUploadingImage(false);
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from("product-images")
+        .getPublicUrl(path);
+      image_url = urlData.publicUrl;
+      setUploadingImage(false);
+    }
+
+    if (!imagePreview && !imageFile) {
+      image_url = null;
+    }
+
     const payload = {
       code: code.trim(),
       name: name.trim(),
       price: Number(price),
       category_id: categoryId || null,
+      image_url,
       active,
     };
-    const { error } = product
+
+    const { error: saveError } = product
       ? await supabase.from("products").update(payload).eq("id", product.id)
       : await supabase.from("products").insert(payload);
     setSaving(false);
-    if (error) setError(error.message);
+    if (saveError) setError(saveError.message);
     else onSaved();
   };
 
@@ -348,7 +856,50 @@ function ProductForm({
       <h3 className="font-serif text-lg mb-4 text-ink">
         {product ? "Editar producto" : "Nuevo producto"}
       </h3>
-      {/* fields below */}
+
+      <div className="mb-4">
+        <p className="eyebrow mb-2">Foto del producto</p>
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 rounded-xl border border-cream-300 overflow-hidden bg-cream-100 flex items-center justify-center flex-shrink-0">
+            {imagePreview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={imagePreview}
+                alt="Vista previa"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="font-serif text-2xl text-brand-dark">
+                {name.charAt(0).toUpperCase() || "?"}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="btn-secondary text-xs py-2 px-3 cursor-pointer">
+              {imagePreview ? "Cambiar foto" : "Subir foto"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleImagePick}
+              />
+            </label>
+            {imagePreview && (
+              <button
+                type="button"
+                onClick={removeImage}
+                className="text-xs text-red-600 hover:text-red-800"
+              >
+                Quitar foto
+              </button>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-ink-light mt-2">
+          Acepta JPG, PNG o WEBP. Se recomienda foto cuadrada.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <input
           className="input"
@@ -390,14 +941,16 @@ function ProductForm({
           Activo
         </label>
       </div>
+
       {error && <p className="text-red-700 text-sm mt-2">{error}</p>}
+
       <div className="flex gap-2 mt-4">
         <button
           className="btn-primary"
           onClick={save}
-          disabled={saving || !code.trim() || !name.trim() || !price}
+          disabled={saving || uploadingImage || !code.trim() || !name.trim() || !price}
         >
-          {saving ? "Guardando..." : "Guardar"}
+          {uploadingImage ? "Subiendo imagen…" : saving ? "Guardando..." : "Guardar"}
         </button>
         <button className="btn-secondary" onClick={onCancel}>
           Cancelar
@@ -407,9 +960,9 @@ function ProductForm({
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // Tab: Categorías
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 function CategoriesTab() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -440,12 +993,7 @@ function CategoriesTab() {
   };
 
   const remove = async (c: Category) => {
-    if (
-      !confirm(
-        `¿Eliminar "${c.name}"? Los productos quedarán sin categoría.`
-      )
-    )
-      return;
+    if (!confirm(`¿Eliminar "${c.name}"? Los productos quedarán sin categoría.`)) return;
     await supabase.from("categories").delete().eq("id", c.id);
     load();
   };
@@ -520,10 +1068,7 @@ function CategoriesTab() {
                   >
                     Editar
                   </button>
-                  <button
-                    className="text-red-700"
-                    onClick={() => remove(c)}
-                  >
+                  <button className="text-red-700" onClick={() => remove(c)}>
                     Eliminar
                   </button>
                 </td>
@@ -636,9 +1181,9 @@ function CategoryForm({
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // Tab: Ventas
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 function SalesTab() {
   const [sales, setSales] = useState<Sale[]>([]);
@@ -672,9 +1217,7 @@ function SalesTab() {
       <div className="card p-6 mb-4 flex flex-wrap gap-10">
         <div>
           <div className="eyebrow mb-1">Ventas hoy</div>
-          <div className="font-serif text-4xl text-ink">
-            {todaySummary.count}
-          </div>
+          <div className="font-serif text-4xl text-ink">{todaySummary.count}</div>
         </div>
         <div>
           <div className="eyebrow mb-1">Ingresos hoy</div>
@@ -719,7 +1262,6 @@ function SalesTab() {
           </tbody>
         </table>
       </div>
-
       <p className="text-xs text-ink-light mt-3">
         Se muestran las últimas 100 ventas. Para reportes avanzados, exporta
         desde Supabase.
@@ -728,9 +1270,9 @@ function SalesTab() {
   );
 }
 
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 // Tab: Importar
-// ═════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 const HEADER_ALIASES: Record<string, string[]> = {
   code: ["code", "codigo", "código", "ref", "referencia", "sku"],
@@ -766,11 +1308,13 @@ interface ImportResult {
 function ImportTab() {
   const [text, setText] = useState("");
   const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
 
   const runImport = async () => {
     setRunning(true);
     setResult(null);
+    setProgress("Procesando archivo…");
     const res: ImportResult = { created: 0, updated: 0, errors: [] };
 
     try {
@@ -780,10 +1324,7 @@ function ImportTab() {
         .filter((l) => l.length > 0);
 
       if (lines.length < 2) {
-        res.errors.push({
-          row: 0,
-          reason: "Se necesitan al menos cabecera + 1 fila",
-        });
+        res.errors.push({ row: 0, reason: "Se necesitan al menos cabecera + 1 fila" });
         setResult(res);
         return;
       }
@@ -796,37 +1337,22 @@ function ImportTab() {
         if (norm) headerMap[i] = norm;
       });
 
-      const idxCode = Object.entries(headerMap).find(([, v]) => v === "code")?.[0];
-      const idxName = Object.entries(headerMap).find(([, v]) => v === "name")?.[0];
-      const idxPrice = Object.entries(headerMap).find(([, v]) => v === "price")?.[0];
+      const idxCode     = Object.entries(headerMap).find(([, v]) => v === "code")?.[0];
+      const idxName     = Object.entries(headerMap).find(([, v]) => v === "name")?.[0];
+      const idxPrice    = Object.entries(headerMap).find(([, v]) => v === "price")?.[0];
       const idxCategory = Object.entries(headerMap).find(([, v]) => v === "category")?.[0];
 
       if (idxCode === undefined || idxName === undefined || idxPrice === undefined) {
         res.errors.push({
           row: 0,
-          reason: `Cabeceras requeridas no encontradas. Esperadas: codigo, nombre, precio (categoria opcional). Detectado: ${headerCells.join(" | ")}`,
+          reason: `Cabeceras requeridas no encontradas. Esperadas: codigo, nombre, precio. Detectado: ${headerCells.join(" | ")}`,
         });
         setResult(res);
         return;
       }
 
-      // Cache de categorías existentes
-      const { data: existingCats } = await supabase
-        .from("categories")
-        .select("id, name");
-      const catMap = new Map<string, string>();
-      (existingCats ?? []).forEach((c) =>
-        catMap.set(c.name.toLowerCase(), c.id)
-      );
-
-      // Cache de productos existentes (por code)
-      const { data: existingProds } = await supabase
-        .from("products")
-        .select("id, code");
-      const prodMap = new Map<string, string>();
-      (existingProds ?? []).forEach((p) =>
-        prodMap.set(p.code, p.id)
-      );
+      interface ParsedRow { rowNum: number; code: string; name: string; price: number; categoryName: string }
+      const parsed: ParsedRow[] = [];
 
       for (let i = 1; i < lines.length; i++) {
         const cells = lines[i].split(sep).map(stripQuotes);
@@ -834,67 +1360,63 @@ function ImportTab() {
         const name = cells[Number(idxName)]?.trim();
         const priceRaw = cells[Number(idxPrice)]?.trim().replace(/[^\d.,-]/g, "").replace(",", ".");
         const price = Number(priceRaw);
-        const categoryName = idxCategory !== undefined ? cells[Number(idxCategory)]?.trim() : "";
+        const categoryName = idxCategory !== undefined ? cells[Number(idxCategory)]?.trim() ?? "" : "";
 
         if (!code || !name || !Number.isFinite(price)) {
-          res.errors.push({
-            row: i + 1,
-            reason: `Fila inválida (code="${code}", name="${name}", price="${priceRaw}")`,
-          });
+          res.errors.push({ row: i + 1, reason: `Fila inválida (code="${code}", name="${name}", price="${priceRaw}")` });
           continue;
         }
+        parsed.push({ rowNum: i + 1, code, name, price, categoryName });
+      }
 
-        // Resolver categoría: crear si no existe
-        let category_id: string | null = null;
-        if (categoryName) {
-          const lookup = catMap.get(categoryName.toLowerCase());
-          if (lookup) {
-            category_id = lookup;
-          } else {
-            const { data: newCat, error: catErr } = await supabase
-              .from("categories")
-              .insert({ name: categoryName })
-              .select("id")
-              .single();
-            if (catErr || !newCat) {
-              res.errors.push({
-                row: i + 1,
-                reason: `No se pudo crear categoría "${categoryName}": ${catErr?.message ?? "error desconocido"}`,
-              });
-              continue;
-            }
-            category_id = newCat.id;
-            catMap.set(categoryName.toLowerCase(), newCat.id);
-          }
-        }
+      setProgress("Resolviendo categorías…");
+      const { data: existingCats } = await supabase.from("categories").select("id, name");
+      const catMap = new Map<string, string>();
+      (existingCats ?? []).forEach((c) => catMap.set(c.name.toLowerCase(), c.id));
 
-        const payload = { code, name, price, category_id, active: true };
-        const existingId = prodMap.get(code);
-        if (existingId) {
-          const { error } = await supabase
-            .from("products")
-            .update(payload)
-            .eq("id", existingId);
-          if (error) {
-            res.errors.push({ row: i + 1, reason: error.message });
-          } else {
-            res.updated += 1;
-          }
+      const newCatNames = [
+        ...new Set(parsed.map((r) => r.categoryName).filter((n) => n && !catMap.has(n.toLowerCase()))),
+      ];
+
+      if (newCatNames.length > 0) {
+        const { data: created, error: catErr } = await supabase
+          .from("categories")
+          .insert(newCatNames.map((name) => ({ name })))
+          .select("id, name");
+        if (catErr) {
+          res.errors.push({ row: 0, reason: `Error creando categorías: ${catErr.message}` });
         } else {
-          const { error, data } = await supabase
-            .from("products")
-            .insert(payload)
-            .select("id")
-            .single();
-          if (error) {
-            res.errors.push({ row: i + 1, reason: error.message });
-          } else {
-            res.created += 1;
-            if (data) prodMap.set(code, data.id);
-          }
+          (created ?? []).forEach((c) => catMap.set(c.name.toLowerCase(), c.id));
+        }
+      }
+
+      const payloads = parsed.map((r) => ({
+        code: r.code,
+        name: r.name,
+        price: r.price,
+        category_id: catMap.get(r.categoryName.toLowerCase()) ?? null,
+        active: true,
+      }));
+
+      const { data: existingProds } = await supabase.from("products").select("code");
+      const existingCodes = new Set((existingProds ?? []).map((p) => p.code));
+
+      const CHUNK = 100;
+      for (let start = 0; start < payloads.length; start += CHUNK) {
+        const chunk = payloads.slice(start, start + CHUNK);
+        setProgress(`Importando ${start + 1}–${Math.min(start + CHUNK, payloads.length)} de ${payloads.length}…`);
+        const { error } = await supabase.from("products").upsert(chunk, { onConflict: "code" });
+        if (error) {
+          res.errors.push({ row: start + 2, reason: `Lote ${start / CHUNK + 1}: ${error.message}` });
+        } else {
+          chunk.forEach((p) => {
+            if (existingCodes.has(p.code)) res.updated += 1;
+            else res.created += 1;
+          });
         }
       }
     } finally {
+      setProgress("");
       setRunning(false);
       setResult(res);
     }
@@ -902,20 +1424,38 @@ function ImportTab() {
 
   return (
     <div className="max-w-3xl">
-      <h2 className="display-md mb-2">Importar productos</h2>
       <p className="text-sm text-ink-muted mb-3">
-        Pega el contenido de tu Excel/CSV. Columnas esperadas (en cualquier
-        orden):{" "}
+        Pega el contenido de tu Excel/CSV. Columnas esperadas (en cualquier orden):{" "}
         <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">codigo</code>,{" "}
         <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">nombre</code>,{" "}
         <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">precio</code>,{" "}
         <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">categoria</code>{" "}
-        (opcional).
-        <br />
-        Si una categoría no existe, se crea automáticamente. Si un código ya
-        existe, se actualiza.
+        (opcional). Si un código ya existe, se actualiza.
       </p>
 
+      <div className="flex items-center gap-3 mb-2">
+        <label className="btn-secondary text-xs py-1.5 px-3 cursor-pointer">
+          📂 Cargar archivo CSV
+          <input
+            type="file"
+            accept=".csv,.tsv,.txt"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => setText(ev.target?.result as string ?? "");
+              reader.readAsText(file, "utf-8");
+              e.target.value = "";
+            }}
+          />
+        </label>
+        {text && (
+          <span className="text-xs text-ink-muted">
+            {text.split(/\r?\n/).filter(Boolean).length - 1} filas cargadas
+          </span>
+        )}
+      </div>
       <textarea
         className="input min-h-[240px] font-mono text-xs"
         placeholder={`codigo,nombre,precio,categoria\nL-A,Letra A,5000,Letras\nL-B,Letra B,5000,Letras`}
@@ -930,35 +1470,232 @@ function ImportTab() {
       >
         {running ? "Importando..." : "Importar"}
       </button>
+      {progress && <p className="text-sm text-ink-muted mt-2 italic">{progress}</p>}
 
       {result && (
         <div className="card p-4 mt-4">
           <h3 className="font-serif text-lg mb-3 text-ink">Resultado</h3>
-          <p className="text-sm">
-            ✅ Creados: <strong>{result.created}</strong>
-          </p>
-          <p className="text-sm">
-            🔄 Actualizados: <strong>{result.updated}</strong>
-          </p>
-          <p className="text-sm">
-            ⚠️ Errores: <strong>{result.errors.length}</strong>
-          </p>
+          <p className="text-sm">✅ Creados: <strong>{result.created}</strong></p>
+          <p className="text-sm">🔄 Actualizados: <strong>{result.updated}</strong></p>
+          <p className="text-sm">⚠️ Errores: <strong>{result.errors.length}</strong></p>
           {result.errors.length > 0 && (
             <details className="mt-2 text-xs">
-              <summary className="cursor-pointer text-ink-muted">
-                Ver detalle
-              </summary>
+              <summary className="cursor-pointer text-ink-muted">Ver detalle</summary>
               <ul className="mt-2 space-y-1">
                 {result.errors.map((e, i) => (
-                  <li key={i}>
-                    Fila {e.row}: {e.reason}
-                  </li>
+                  <li key={i}>Fila {e.row}: {e.reason}</li>
                 ))}
               </ul>
             </details>
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Tab: Vendedores
+// ═════════════════════════════════════════════════════════════════════════════
+
+function CodeCell({ code }: { code: string }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <span className="flex items-center gap-2">
+      <span className="font-mono text-xs">{visible ? code : "••••"}</span>
+      <button
+        className="text-xs text-ink-muted hover:text-brand-darker underline"
+        onClick={() => setVisible((v) => !v)}
+      >
+        {visible ? "Ocultar" : "Ver"}
+      </button>
+    </span>
+  );
+}
+
+function SellersTab() {
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<Seller | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("sellers")
+      .select("*")
+      .order("name", { ascending: true });
+    setSellers((data ?? []) as Seller[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const toggleActive = async (s: Seller) => {
+    await supabase.from("sellers").update({ active: !s.active }).eq("id", s.id);
+    load();
+  };
+
+  const remove = async (s: Seller) => {
+    if (!confirm(`¿Eliminar al vendedor "${s.name}"?`)) return;
+    await supabase.from("sellers").delete().eq("id", s.id);
+    load();
+  };
+
+  if (loading)
+    return <p className="font-serif italic text-ink-muted">Cargando…</p>;
+
+  return (
+    <div>
+      <p className="text-sm text-ink-muted mb-4">
+        Los vendedores se identifican con nombre y código al iniciar turno,
+        cuando el login de vendedor está activo en Configuración.
+      </p>
+      <button
+        className="btn-primary mb-4"
+        onClick={() => {
+          setEditing(null);
+          setShowForm(true);
+        }}
+      >
+        + Nuevo vendedor
+      </button>
+
+      {showForm && (
+        <SellerForm
+          seller={editing}
+          onCancel={() => setShowForm(false)}
+          onSaved={() => {
+            setShowForm(false);
+            load();
+          }}
+        />
+      )}
+
+      <div className="card overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-cream-100 text-left text-ink-muted text-xs uppercase tracking-widest">
+            <tr>
+              <th className="p-3">Nombre</th>
+              <th className="p-3">Código</th>
+              <th className="p-3">Activo</th>
+              <th className="p-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {sellers.map((s) => (
+              <tr key={s.id} className="border-t border-cream-300/50">
+                <td className="p-3 font-medium">{s.name}</td>
+                <td className="p-3"><CodeCell code={s.code} /></td>
+                <td className="p-3">
+                  <button
+                    onClick={() => toggleActive(s)}
+                    className={`px-2 py-1 rounded text-xs ${
+                      s.active
+                        ? "bg-brand/10 text-brand-darker"
+                        : "bg-cream-200 text-ink-light"
+                    }`}
+                  >
+                    {s.active ? "Sí" : "No"}
+                  </button>
+                </td>
+                <td className="p-3 text-right">
+                  <button
+                    className="text-brand mr-2"
+                    onClick={() => { setEditing(s); setShowForm(true); }}
+                  >
+                    Editar
+                  </button>
+                  <button className="text-red-700" onClick={() => remove(s)}>
+                    Eliminar
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {sellers.length === 0 && (
+              <tr>
+                <td colSpan={4} className="p-6 text-center text-ink-light">
+                  Sin vendedores creados aún.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SellerForm({
+  seller,
+  onCancel,
+  onSaved,
+}: {
+  seller: Seller | null;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(seller?.name ?? "");
+  const [code, setCode] = useState(seller?.code ?? "");
+  const [active, setActive] = useState(seller?.active ?? true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    const payload = { name: name.trim(), code: code.trim(), active };
+    const { error: err } = seller
+      ? await supabase.from("sellers").update(payload).eq("id", seller.id)
+      : await supabase.from("sellers").insert(payload);
+    setSaving(false);
+    if (err) setError(err.message);
+    else onSaved();
+  };
+
+  return (
+    <div className="card-elevated p-5 mb-4 border-brand/40 border">
+      <h3 className="font-serif text-lg mb-4 text-ink">
+        {seller ? "Editar vendedor" : "Nuevo vendedor"}
+      </h3>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <input
+          className="input"
+          placeholder="Nombre (ej: María)"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+        />
+        <input
+          className="input font-mono"
+          placeholder="Código (ej: 4321)"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+        />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+          />
+          Activo
+        </label>
+      </div>
+      {error && <p className="text-red-700 text-sm mt-2">{error}</p>}
+      <div className="flex gap-2 mt-4">
+        <button
+          className="btn-primary"
+          onClick={save}
+          disabled={saving || !name.trim() || !code.trim()}
+        >
+          {saving ? "Guardando..." : "Guardar"}
+        </button>
+        <button className="btn-secondary" onClick={onCancel}>
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }

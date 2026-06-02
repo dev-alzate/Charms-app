@@ -53,40 +53,6 @@ export function buildWhatsAppLink(phone: string, message: string): string {
   return `https://wa.me/${normalized}?text=${encoded}`;
 }
 
-// ─── Mensaje al armador ─────────────────────────────────────────────────────
-
-/**
- * Construye el mensaje exacto para enviar al armador por WhatsApp,
- * agrupando items idénticos con xN.
- */
-export function buildArmadorMessage(sale: {
-  ticket_number: number;
-  customer_name: string | null;
-  items: SaleItem[];
-  total: number;
-}): string {
-  const lines: string[] = [];
-  lines.push(`🔔 *TICKET #${sale.ticket_number}*`);
-  if (sale.customer_name && sale.customer_name.trim()) {
-    lines.push(`👤 Cliente: ${sale.customer_name.trim()}`);
-  }
-  lines.push("");
-  lines.push("*Armar la siguiente pulsera:*");
-  lines.push("");
-
-  for (const item of sale.items) {
-    const qty = item.quantity > 1 ? ` x${item.quantity}` : "";
-    lines.push(`• ${item.name}${qty}  _(${item.code})_`);
-  }
-
-  lines.push("");
-  lines.push(`💰 Total cobrado: *${formatCurrency(sale.total)}*`);
-  lines.push("");
-  lines.push("✅ Cuando termines, entrégala al cliente.");
-
-  return lines.join("\n");
-}
-
 // ─── Mensaje al cliente (resumen de factura) ────────────────────────────────
 
 export function buildCustomerMessage(sale: Sale, businessName: string): string {

@@ -35,13 +35,22 @@ export interface Product {
   name: string;
   price: number;
   category_id: string | null;
+  image_url: string | null;
   active: boolean;
   display_order: number;
   created_at: string;
   updated_at: string;
 }
 
-export type PaymentMethod = "cash" | "nequi" | "daviplata";
+export type PaymentMethod = "cash" | "transfer" | "card";
+
+export interface PaymentMethodConfig {
+  id: string;
+  key: string;
+  label: string;
+  active: boolean;
+  display_order: number;
+}
 
 export interface SaleItem {
   product_id: string;
@@ -71,14 +80,26 @@ export interface Setting {
   updated_at: string;
 }
 
+export interface Seller {
+  id: string;
+  name: string;
+  code: string;
+  active: boolean;
+  created_at: string;
+}
+
 // ─── Tipo local solo de cliente ─────────────────────────────────────────────
 
 export interface CartItem extends SaleItem {
-  // mismo shape que SaleItem; lo separamos por claridad semántica
+  image_url?: string | null;
 }
 
-export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  cash: "Efectivo",
-  nequi: "Nequi",
+// Fallback estático para mostrar etiquetas (usado en historial de ventas)
+export const PAYMENT_LABELS: Record<string, string> = {
+  cash:     "Efectivo",
+  transfer: "Transferencia",
+  card:     "Datafono",
+  // compatibilidad con ventas antiguas
+  nequi:     "Nequi",
   daviplata: "Daviplata",
 };

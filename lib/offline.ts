@@ -1,12 +1,19 @@
-import type { Category, Product } from "./supabase";
+import type { Category, PaymentMethodConfig, Product } from "./supabase";
 
 const CATALOG_KEY = "pelgy_catalog_cache";
 const PENDING_KEY = "pelgy_pending_sales";
 
+// Fallback cuando la caché no tiene métodos de pago (caché antigua)
+export const DEFAULT_PAYMENT_METHODS: PaymentMethodConfig[] = [
+  { id: "default-cash",     key: "cash",     label: "Efectivo",      active: true, display_order: 1 },
+  { id: "default-transfer", key: "transfer", label: "Transferencia", active: true, display_order: 2 },
+  { id: "default-card",     key: "card",     label: "Datafono",      active: true, display_order: 3 },
+];
+
 export interface CatalogCache {
   categories: Category[];
   products: Product[];
-  armadorPhone: string;
+  paymentMethods: PaymentMethodConfig[];
   savedAt: number;
 }
 
@@ -24,10 +31,10 @@ export interface PendingSale {
 export function saveCatalogCache(
   categories: Category[],
   products: Product[],
-  armadorPhone: string
+  paymentMethods: PaymentMethodConfig[]
 ): void {
   if (typeof window === "undefined") return;
-  const cache: CatalogCache = { categories, products, armadorPhone, savedAt: Date.now() };
+  const cache: CatalogCache = { categories, products, paymentMethods, savedAt: Date.now() };
   localStorage.setItem(CATALOG_KEY, JSON.stringify(cache));
 }
 
@@ -35,7 +42,14 @@ export function loadCatalogCache(): CatalogCache | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(CATALOG_KEY);
-    return raw ? (JSON.parse(raw) as CatalogCache) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CatalogCache>;
+    return {
+      categories:     parsed.categories     ?? [],
+      products:       parsed.products       ?? [],
+      paymentMethods: parsed.paymentMethods ?? DEFAULT_PAYMENT_METHODS,
+      savedAt:        parsed.savedAt        ?? 0,
+    };
   } catch {
     return null;
   }
