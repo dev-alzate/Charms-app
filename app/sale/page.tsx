@@ -353,6 +353,17 @@ export default function SalePage() {
     downloadInvoice(completedSale);
   }, [completedSale]);
 
+  // ── Auto-seleccionar el primer método de pago al cargar ────────────────
+  useEffect(() => {
+    if (paymentMethods.length === 0) return;
+    setPayment((prev) => {
+      // Si ya hay uno seleccionado y sigue activo, no tocarlo
+      if (prev && paymentMethods.some((m) => m.key === prev)) return prev;
+      // Si no hay ninguno (o el que había ya no existe), elegir el primero
+      return paymentMethods[0].key as PaymentMethod;
+    });
+  }, [paymentMethods]);
+
   // ── Debounce de búsqueda (300 ms) ──────────────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
