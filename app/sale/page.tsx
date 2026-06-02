@@ -739,74 +739,168 @@ export default function SalePage() {
 
   // ─── Vista: checkout ───────────────────────────────────────────────────
   if (view === "checkout") {
-    return (
-      <main className="min-h-screen p-4 bg-cream-100">
-        <div className="max-w-md mx-auto">
-          <button
-            className="text-ink-muted text-sm mb-4 hover:text-brand-darker"
-            onClick={() => setView("grid")}
-            disabled={submitting}
-          >
-            ← Volver
-          </button>
+    const selectedPm = paymentMethods.find((m) => m.key === payment);
+    const pmLabel = selectedPm?.label ?? payment ?? "";
+    const pmDescription = PM_DESCRIPTIONS[payment ?? ""] ?? "";
 
-          <div className="mb-6">
-            <p className="eyebrow mb-1">Cobrar</p>
-            <p className="font-serif text-3xl text-ink">
-              {formatCurrency(cartTotal)}
-            </p>
-            <p className="text-sm text-ink-muted mt-1">
-              {cartCount} {cartCount === 1 ? "pieza" : "piezas"}
-            </p>
+    return (
+      <main className="min-h-screen pb-8 bg-cream-100">
+        {/* Header */}
+        <header className="sticky top-0 z-20 bg-cream-50/90 backdrop-blur border-b border-cream-300/60">
+          <div className="max-w-md mx-auto px-4 h-14 flex items-center justify-between">
+            <button
+              className="flex items-center gap-1.5 text-ink-muted text-sm hover:text-brand-darker disabled:opacity-50"
+              onClick={() => setView("grid")}
+              disabled={submitting}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Volver
+            </button>
+            <span className="font-serif text-base text-brand-darker tracking-wide">PELGY</span>
+            <span className="w-14" />
+          </div>
+        </header>
+
+        <div className="max-w-md mx-auto px-4 pt-4 flex flex-col gap-4">
+          {/* Total a cobrar */}
+          <div className="card p-5 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-brand/10 flex items-center justify-center flex-shrink-0">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#8B5E3C" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <path d="M16 10a4 4 0 0 1-8 0" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="eyebrow mb-0.5">Total a cobrar</p>
+              <p className="font-serif text-3xl text-ink leading-none">
+                {formatCurrency(cartTotal)}
+              </p>
+              <p className="text-sm text-ink-muted mt-1">
+                {cartCount} {cartCount === 1 ? "producto" : "productos"} en el pedido
+              </p>
+            </div>
           </div>
 
-          {/* Método de pago seleccionado — solo lectura */}
+          {/* Resumen del pedido */}
+          <div className="card p-5">
+            <h2 className="eyebrow mb-4">Resumen del pedido</h2>
+            <ul className="flex flex-col divide-y divide-cream-200">
+              {cart.map((it) => (
+                <li key={it.product_id} className="flex items-center gap-3 py-3 first:pt-0">
+                  <div className="w-11 h-11 rounded-lg overflow-hidden bg-cream-200 flex items-center justify-center flex-shrink-0">
+                    {it.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={it.image_url}
+                        alt={it.name}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span className="font-serif text-base text-brand-dark">
+                        {it.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-ink leading-tight truncate">{it.name}</p>
+                    <p className="text-[11px] text-ink-light font-mono">{it.code}</p>
+                  </div>
+                  <span className="text-[11px] text-ink-muted bg-cream-100 border border-cream-300 rounded-full px-2 py-0.5 flex-shrink-0">
+                    x{it.quantity}
+                  </span>
+                  <span className="text-sm font-medium text-ink w-20 text-right flex-shrink-0">
+                    {formatCurrency(it.price * it.quantity)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex items-center justify-between pt-4 mt-1 border-t border-cream-300">
+              <span className="text-sm text-ink-muted">Total</span>
+              <span className="font-serif text-lg text-ink">{formatCurrency(cartTotal)}</span>
+            </div>
+          </div>
+
+          {/* Método de pago — solo el seleccionado en el carrito */}
           {payment && (
-            <div className="card p-4 mb-4 flex items-center justify-between">
-              <span className="eyebrow">Método de pago</span>
-              <span className="text-sm font-medium text-ink">
-                {paymentMethods.find((m) => m.key === payment)?.label ?? payment}
-              </span>
+            <div className="card p-5">
+              <h2 className="eyebrow mb-4">Método de pago</h2>
+              <div className="flex items-center gap-3 rounded-xl border-2 border-brand bg-brand/5 px-4 py-3">
+                <div className="w-10 h-10 rounded-xl bg-brand flex items-center justify-center flex-shrink-0">
+                  <PmIconSale pmKey={payment} selected />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-ink leading-tight">{pmLabel}</p>
+                  {pmDescription && (
+                    <p className="text-xs text-ink-muted">{pmDescription}</p>
+                  )}
+                </div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="#8B5E3C" className="flex-shrink-0">
+                  <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 14.2l-4-4 1.4-1.4 2.6 2.6 5.6-5.6 1.4 1.4-7 7z" />
+                </svg>
+              </div>
             </div>
           )}
 
-          <div className="card p-5 mb-4">
-            <h2 className="eyebrow mb-3">
-              Datos del cliente{" "}
-              <span className="text-ink-light normal-case tracking-normal">
-                (opcional)
+          {/* Datos del cliente */}
+          <div className="card p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="eyebrow">Datos del cliente</h2>
+              <span className="text-[11px] text-ink-muted border border-cream-300 rounded-full px-2.5 py-0.5">
+                Opcional
               </span>
-            </h2>
+            </div>
+            <label className="block text-sm text-ink-muted mb-1.5">Nombre</label>
             <input
-              className="input mb-3"
+              className="input mb-4"
               type="text"
-              placeholder="Nombre"
+              placeholder="Nombre del cliente"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
             />
+            <label className="block text-sm text-ink-muted mb-1.5">
+              Celular{" "}
+              <span className="text-ink-light text-xs">para enviar factura por WhatsApp</span>
+            </label>
             <input
               className="input"
               type="tel"
               inputMode="numeric"
-              placeholder="Celular (para enviar factura por WhatsApp)"
+              placeholder="300 000 0000"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
             />
           </div>
 
           {submitError && (
-            <div className="card p-3 mb-4 border-red-200 bg-red-50 text-red-700 text-sm">
+            <div className="card p-3 border-red-200 bg-red-50 text-red-700 text-sm">
               {submitError}
             </div>
           )}
 
+          {/* Total + confirmar */}
+          <div className="flex items-center justify-between px-1 pt-2 border-t border-cream-300">
+            <span className="text-sm text-ink-muted">Total a cobrar</span>
+            <span className="font-serif text-2xl text-ink">{formatCurrency(cartTotal)}</span>
+          </div>
+
           <button
-            className="btn-confirm w-full py-6 text-base"
+            className="btn-confirm w-full py-5 text-base"
             onClick={confirmPayment}
             disabled={!payment || submitting}
           >
-            {submitting ? "Guardando…" : `Confirmar ${formatCurrency(cartTotal)}`}
+            {submitting ? "Guardando…" : `Confirmar cobro · ${formatCurrency(cartTotal)}`}
           </button>
+
+          {payment && (
+            <p className="text-center text-xs text-ink-muted -mt-1">
+              Método: <span className="font-medium text-ink">{pmLabel}</span>
+            </p>
+          )}
         </div>
       </main>
     );
@@ -1292,6 +1386,14 @@ export default function SalePage() {
     </>
   );
 }
+
+// ─── Descripciones de métodos de pago (mostradas en el checkout) ──────────
+
+const PM_DESCRIPTIONS: Record<string, string> = {
+  cash: "Pago en mano",
+  transfer: "Nequi / Daviplata",
+  card: "Tarjeta débito / crédito",
+};
 
 // ─── Subcomponente: iconos de método de pago (sidebar) ────────────────────
 
