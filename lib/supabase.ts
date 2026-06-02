@@ -91,7 +91,7 @@ export interface Seller {
 // ─── Tipo local solo de cliente ─────────────────────────────────────────────
 
 export interface CartItem extends SaleItem {
-  // mismo shape que SaleItem; lo separamos por claridad semántica
+  image_url?: string | null;
 }
 
 // Fallback estático para mostrar etiquetas (usado en historial de ventas)
