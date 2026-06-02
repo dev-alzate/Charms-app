@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
@@ -160,6 +161,16 @@ function LoginForm() {
               </button>
             </form>
           )}
+        </div>
+
+        {/* Volver al inicio */}
+        <div className="mt-6 text-center">
+          <Link
+            href="/"
+            className="text-sm text-ink-muted hover:text-brand-darker transition-colors"
+          >
+            ← Volver al inicio
+          </Link>
         </div>
       </div>
     </main>
