@@ -596,6 +596,8 @@ function ConfigTab() {
 // Tab: Productos
 // ═════════════════════════════════════════════════════════════════════════════
 
+const PRODUCTS_PAGE_SIZE = 20;
+
 function ProductsTab() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -603,6 +605,8 @@ function ProductsTab() {
   const [filterCat, setFilterCat] = useState<string | "ALL">("ALL");
   const [editing, setEditing] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -625,13 +629,28 @@ function ProductsTab() {
     load();
   }, [load]);
 
+  const filtered = useMemo(() => {
+    let result = filterCat === "ALL"
+      ? products
+      : products.filter((p) => p.category_id === filterCat);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.code.toLowerCase().includes(q) ||
+          p.name.toLowerCase().includes(q)
+      );
+    }
+    return result;
+  }, [products, filterCat, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PRODUCTS_PAGE_SIZE));
   const visible = useMemo(
-    () =>
-      filterCat === "ALL"
-        ? products
-        : products.filter((p) => p.category_id === filterCat),
-    [products, filterCat]
+    () => filtered.slice((page - 1) * PRODUCTS_PAGE_SIZE, page * PRODUCTS_PAGE_SIZE),
+    [filtered, page]
   );
+
+  useEffect(() => { setPage(1); }, [search, filterCat]);
 
   const toggleActive = async (p: Product) => {
     await supabase
@@ -665,6 +684,31 @@ function ProductsTab() {
             </option>
           ))}
         </select>
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none"
+            width="15" height="15" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            className="input pl-9 pr-8"
+            type="text"
+            placeholder="Buscar por código o nombre…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink text-lg leading-none"
+              onClick={() => setSearch("")}
+              aria-label="Limpiar búsqueda"
+            >
+              ×
+            </button>
+          )}
+        </div>
         <button
           className="btn-primary"
           onClick={() => {
@@ -752,13 +796,37 @@ function ProductsTab() {
             {visible.length === 0 && (
               <tr>
                 <td colSpan={6} className="p-6 text-center text-ink-light">
-                  Sin productos.
+                  {search ? "Sin resultados para esa búsqueda." : "Sin productos."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-3 text-sm text-ink-muted">
+          <span>
+            {filtered.length} producto{filtered.length !== 1 ? "s" : ""} · página {page} de {totalPages}
+          </span>
+          <div className="flex gap-2">
+            <button
+              className="btn-secondary py-1 px-3 text-xs"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
+              ← Anterior
+            </button>
+            <button
+              className="btn-secondary py-1 px-3 text-xs"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+            >
+              Siguiente →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -789,6 +857,7 @@ function ProductForm({
     product?.image_url ?? null
   );
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string>(product?.image_url ?? "");
 
   const handleImagePick = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -800,14 +869,23 @@ function ProductForm({
   const removeImage = () => {
     setImageFile(null);
     setImagePreview(null);
+    setImageUrl("");
+  };
+
+  const handleImageUrlChange = (url: string) => {
+    setImageUrl(url);
+    if (!imageFile) {
+      setImagePreview(isValidImageUrl(url) ? url : null);
+    }
   };
 
   const save = async () => {
     setSaving(true);
     setError(null);
 
-    let image_url = product?.image_url ?? null;
+    let final_image_url: string | null = null;
 
+    // Priority 1: File upload (generates Storage URL)
     if (imageFile) {
       setUploadingImage(true);
       const ext = imageFile.name.split(".").pop() ?? "jpg";
@@ -826,12 +904,16 @@ function ProductForm({
       const { data: urlData } = supabase.storage
         .from("product-images")
         .getPublicUrl(path);
-      image_url = urlData.publicUrl;
+      final_image_url = urlData.publicUrl;
       setUploadingImage(false);
     }
-
-    if (!imagePreview && !imageFile) {
-      image_url = null;
+    // Priority 2: URL input (if valid)
+    else if (imageUrl && isValidImageUrl(imageUrl)) {
+      final_image_url = imageUrl.trim();
+    }
+    // Priority 3: Existing image (for updates, don't clear if nothing provided)
+    else if (product?.image_url) {
+      final_image_url = product.image_url;
     }
 
     const payload = {
@@ -839,7 +921,7 @@ function ProductForm({
       name: name.trim(),
       price: Number(price),
       category_id: categoryId || null,
-      image_url,
+      image_url: final_image_url,
       active,
     };
 
@@ -900,6 +982,20 @@ function ProductForm({
         </p>
       </div>
 
+      <div className="mb-4">
+        <p className="eyebrow mb-2">O pega una URL de imagen</p>
+        <input
+          type="text"
+          className="input"
+          placeholder="https://ejemplo.com/imagen.jpg"
+          value={imageUrl}
+          onChange={(e) => handleImageUrlChange(e.target.value)}
+        />
+        <p className="text-xs text-ink-light mt-2">
+          Acepta URLs que empiezan con http:// o https://. Si cargas un archivo, la URL se ignora.
+        </p>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <input
           className="input"
@@ -948,7 +1044,7 @@ function ProductForm({
         <button
           className="btn-primary"
           onClick={save}
-          disabled={saving || uploadingImage || !code.trim() || !name.trim() || !price}
+          disabled={saving || uploadingImage || !code.trim() || !name.trim() || !price || !!(imageUrl && !isValidImageUrl(imageUrl))}
         >
           {uploadingImage ? "Subiendo imagen…" : saving ? "Guardando..." : "Guardar"}
         </button>
@@ -1279,6 +1375,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
   name: ["name", "nombre", "producto", "descripcion", "descripción"],
   price: ["price", "precio", "valor", "costo"],
   category: ["category", "categoria", "categoría", "cat"],
+  image: ["image", "image_url", "imagen", "imagenes", "imágenes", "url_imagen", "images", "Imágenes"],
 };
 
 function detectSeparator(line: string): string {
@@ -1299,10 +1396,17 @@ function stripQuotes(s: string): string {
   return s.trim().replace(/^["']|["']$/g, "");
 }
 
+function isValidImageUrl(url: string): boolean {
+  if (!url || url.trim().length === 0) return false;
+  const trimmed = url.trim();
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://");
+}
+
 interface ImportResult {
   created: number;
   updated: number;
   errors: { row: number; reason: string }[];
+  products_with_images?: number;
 }
 
 function ImportTab() {
@@ -1341,6 +1445,7 @@ function ImportTab() {
       const idxName     = Object.entries(headerMap).find(([, v]) => v === "name")?.[0];
       const idxPrice    = Object.entries(headerMap).find(([, v]) => v === "price")?.[0];
       const idxCategory = Object.entries(headerMap).find(([, v]) => v === "category")?.[0];
+      const idxImage    = Object.entries(headerMap).find(([, v]) => v === "image")?.[0];
 
       if (idxCode === undefined || idxName === undefined || idxPrice === undefined) {
         res.errors.push({
@@ -1351,7 +1456,7 @@ function ImportTab() {
         return;
       }
 
-      interface ParsedRow { rowNum: number; code: string; name: string; price: number; categoryName: string }
+      interface ParsedRow { rowNum: number; code: string; name: string; price: number; categoryName: string; image_url: string }
       const parsed: ParsedRow[] = [];
 
       for (let i = 1; i < lines.length; i++) {
@@ -1361,12 +1466,13 @@ function ImportTab() {
         const priceRaw = cells[Number(idxPrice)]?.trim().replace(/[^\d.,-]/g, "").replace(",", ".");
         const price = Number(priceRaw);
         const categoryName = idxCategory !== undefined ? cells[Number(idxCategory)]?.trim() ?? "" : "";
+        const imageUrl = idxImage !== undefined ? cells[Number(idxImage)]?.trim() ?? "" : "";
 
         if (!code || !name || !Number.isFinite(price)) {
           res.errors.push({ row: i + 1, reason: `Fila inválida (code="${code}", name="${name}", price="${priceRaw}")` });
           continue;
         }
-        parsed.push({ rowNum: i + 1, code, name, price, categoryName });
+        parsed.push({ rowNum: i + 1, code, name, price, categoryName, image_url: imageUrl });
       }
 
       setProgress("Resolviendo categorías…");
@@ -1390,13 +1496,30 @@ function ImportTab() {
         }
       }
 
-      const payloads = parsed.map((r) => ({
-        code: r.code,
-        name: r.name,
-        price: r.price,
-        category_id: catMap.get(r.categoryName.toLowerCase()) ?? null,
-        active: true,
-      }));
+      let productsWithImages = 0;
+      const warnings: { row: number; reason: string }[] = [];
+
+      const payloads = parsed.map((r) => {
+        const payload: any = {
+          code: r.code,
+          name: r.name,
+          price: r.price,
+          category_id: catMap.get(r.categoryName.toLowerCase()) ?? null,
+          active: true,
+        };
+
+        // Only include image_url if valid
+        if (r.image_url) {
+          if (isValidImageUrl(r.image_url)) {
+            payload.image_url = r.image_url.trim();
+            productsWithImages += 1;
+          } else {
+            warnings.push({ row: r.rowNum, reason: `URL de imagen inválida: "${r.image_url}"` });
+          }
+        }
+
+        return payload;
+      });
 
       const { data: existingProds } = await supabase.from("products").select("code");
       const existingCodes = new Set((existingProds ?? []).map((p) => p.code));
@@ -1415,6 +1538,9 @@ function ImportTab() {
           });
         }
       }
+
+      res.errors.push(...warnings);
+      res.products_with_images = productsWithImages;
     } finally {
       setProgress("");
       setRunning(false);
@@ -1429,8 +1555,9 @@ function ImportTab() {
         <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">codigo</code>,{" "}
         <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">nombre</code>,{" "}
         <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">precio</code>,{" "}
-        <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">categoria</code>{" "}
-        (opcional). Si un código ya existe, se actualiza.
+        <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">categoria</code> (opcional),{" "}
+        <code className="bg-cream-200 px-1.5 py-0.5 rounded text-ink-muted">image_url</code> (opcional).{" "}
+        Si un código ya existe, se actualiza. URLs deben empezar con http:// o https://.
       </p>
 
       <div className="flex items-center gap-3 mb-2">
@@ -1458,7 +1585,7 @@ function ImportTab() {
       </div>
       <textarea
         className="input min-h-[240px] font-mono text-xs"
-        placeholder={`codigo,nombre,precio,categoria\nL-A,Letra A,5000,Letras\nL-B,Letra B,5000,Letras`}
+        placeholder={`codigo,nombre,precio,categoria,image_url\nL-A,Letra A,5000,Letras,https://ejemplo.com/imagen.jpg\nL-B,Letra B,5000,Letras,https://ejemplo.com/imagen2.jpg`}
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
@@ -1477,6 +1604,7 @@ function ImportTab() {
           <h3 className="font-serif text-lg mb-3 text-ink">Resultado</h3>
           <p className="text-sm">✅ Creados: <strong>{result.created}</strong></p>
           <p className="text-sm">🔄 Actualizados: <strong>{result.updated}</strong></p>
+          <p className="text-sm">📷 Con imagen: <strong>{result.products_with_images ?? 0}</strong></p>
           <p className="text-sm">⚠️ Errores: <strong>{result.errors.length}</strong></p>
           {result.errors.length > 0 && (
             <details className="mt-2 text-xs">
