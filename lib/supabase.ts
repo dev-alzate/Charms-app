@@ -71,6 +71,7 @@ export interface Sale {
   customer_phone: string | null;
   identifier_name: string | null;
   notes: string | null;
+  pdf_url: string | null;
   created_at: string;
 }
 

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS sales (
   customer_phone  text,
   identifier_name text,
   notes           text,
+  pdf_url         text,
   created_at      timestamptz NOT NULL DEFAULT now()
 );
 

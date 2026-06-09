@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { Sale } from "./supabase";
-import { PAYMENT_LABELS } from "./supabase";
+import { PAYMENT_LABELS, supabase } from "./supabase";
 import { formatCurrency, formatDate } from "./format";
 
 const BUSINESS_NAME = process.env.NEXT_PUBLIC_BUSINESS_NAME ?? "Mi Joyería";
@@ -10,11 +10,10 @@ const BUSINESS_PHONE = process.env.NEXT_PUBLIC_BUSINESS_PHONE ?? "";
 const BUSINESS_ADDRESS = process.env.NEXT_PUBLIC_BUSINESS_ADDRESS ?? "";
 
 /**
- * Genera y descarga la factura en formato 80mm (recibo térmico).
- * 80mm ≈ 226pt de ancho. Largo se ajusta automáticamente con el contenido.
+ * Genera el documento PDF de factura (sin descargar).
+ * Retorna el jsPDF para ser usado por downloadInvoice o uploadInvoicePDF.
  */
-export function downloadInvoice(sale: Sale): void {
-  // Ancho fijo 80mm, alto generoso (el contenido se trunca o se queda con espacio)
+function generateInvoicePDF(sale: Sale): jsPDF {
   const doc = new jsPDF({
     unit: "mm",
     format: [80, 297], // 80mm de ancho, alto A4 (se puede recortar al final)
@@ -149,5 +148,40 @@ export function downloadInvoice(sale: Sale): void {
     align: "center",
   });
 
+  return doc;
+}
+
+/**
+ * Genera y descarga la factura en formato 80mm (recibo térmico).
+ */
+export function downloadInvoice(sale: Sale): void {
+  const doc = generateInvoicePDF(sale);
   doc.save(`Factura-${sale.invoice_number}.pdf`);
+}
+
+/**
+ * Genera la factura en PDF y la sube a Supabase Storage.
+ * Retorna la URL pública del PDF o null si falla.
+ */
+export async function uploadInvoicePDF(sale: Sale): Promise<string | null> {
+  try {
+    const doc = generateInvoicePDF(sale);
+    const pdfBlob = doc.output("blob") as Blob;
+
+    const path = `invoices/${sale.invoice_number}.pdf`;
+    const { error: uploadError } = await supabase.storage
+      .from("sale-invoices")
+      .upload(path, pdfBlob, { upsert: true });
+
+    if (uploadError) {
+      console.error("Error uploading PDF:", uploadError);
+      return null;
+    }
+
+    const { data } = supabase.storage.from("sale-invoices").getPublicUrl(path);
+    return data.publicUrl;
+  } catch (err) {
+    console.error("Error generating/uploading PDF:", err);
+    return null;
+  }
 }
