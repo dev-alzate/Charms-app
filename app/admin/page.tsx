@@ -1382,9 +1382,6 @@ function SalesTab() {
     return { count: todays.length, total };
   }, [sales]);
 
-  if (loading)
-    return <p className="font-serif italic text-ink-muted">Cargando…</p>;
-
   return (
     <div>
       <div className="card p-6 mb-4 flex flex-wrap gap-10">
@@ -1457,7 +1454,14 @@ function SalesTab() {
             </tr>
           </thead>
           <tbody>
-            {sales.map((s) => (
+            {loading && (
+              <tr>
+                <td colSpan={7} className="p-6 text-center text-ink-muted font-serif italic">
+                  Cargando…
+                </td>
+              </tr>
+            )}
+            {!loading && sales.map((s) => (
               <tr key={s.id} className="border-t border-cream-300/50">
                 <td className="p-3 font-mono text-xs">{s.invoice_number}</td>
                 <td className="p-3">#{s.ticket_number}</td>
