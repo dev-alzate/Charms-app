@@ -18,7 +18,7 @@ import {
   buildWhatsAppLink,
   formatCurrency,
 } from "@/lib/format";
-import { downloadInvoice } from "@/lib/invoice";
+import { downloadInvoice, uploadInvoicePDF } from "@/lib/invoice";
 import {
   DEFAULT_PAYMENT_METHODS,
   getPendingSales,
@@ -308,7 +308,24 @@ export default function SalePage() {
         .single();
 
       if (error) throw error;
-      setCompletedSale(data as Sale);
+      const saleData = data as Sale;
+      setCompletedSale(saleData);
+
+      // Upload PDF asynchronously (non-blocking)
+      (async () => {
+        try {
+          const pdfUrl = await uploadInvoicePDF(saleData);
+          if (pdfUrl) {
+            await supabase
+              .from("sales")
+              .update({ pdf_url: pdfUrl })
+              .eq("id", saleData.id);
+          }
+        } catch (err) {
+          console.error("Error uploading/saving PDF:", err);
+        }
+      })();
+
       setView("success");
     } catch {
       if (!navigator.onLine) {

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { signOut } from "next-auth/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Category,
   PAYMENT_LABELS,
@@ -1281,21 +1281,98 @@ function CategoryForm({
 // Tab: Ventas
 // ═════════════════════════════════════════════════════════════════════════════
 
+const SALES_PAGE_SIZE = 30;
+
 function SalesTab() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const offsetRef = useRef(0);
+
+  const loadSales = useCallback(
+    async (reset = true) => {
+      if (reset) {
+        setSales([]);
+        offsetRef.current = 0;
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      let query = supabase
+        .from("sales")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false });
+
+      if (search.trim()) {
+        query = query.ilike("invoice_number", `%${search}%`);
+      }
+
+      if (dateFrom) {
+        const fromDate = new Date(dateFrom);
+        fromDate.setHours(0, 0, 0, 0);
+        query = query.gte("created_at", fromDate.toISOString());
+      }
+
+      if (dateTo) {
+        const toDate = new Date(dateTo);
+        toDate.setHours(23, 59, 59, 999);
+        query = query.lte("created_at", toDate.toISOString());
+      }
+
+      const offset = reset ? 0 : offsetRef.current;
+      const { data, count, error } = await query
+        .range(offset, offset + SALES_PAGE_SIZE - 1);
+
+      if (!error) {
+        const newSales = (data ?? []) as Sale[];
+        setSales((prev) => (reset ? newSales : [...prev, ...newSales]));
+        offsetRef.current += SALES_PAGE_SIZE;
+        setHasMore((count ?? 0) > offset + SALES_PAGE_SIZE);
+      }
+
+      setLoading(false);
+      setLoadingMore(false);
+    },
+    [search, dateFrom, dateTo]
+  );
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase
-        .from("sales")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      setSales((data ?? []) as Sale[]);
-      setLoading(false);
-    })();
-  }, []);
+    loadSales(true);
+  }, [loadSales]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    if (observerRef.current) observerRef.current.disconnect();
+
+    const sentinel = document.createElement("div");
+    sentinel.id = "scroll-sentinel";
+    container.appendChild(sentinel);
+
+    observerRef.current = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          loadSales(false);
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    observerRef.current.observe(sentinel);
+
+    return () => {
+      if (observerRef.current) observerRef.current.disconnect();
+      sentinel.remove();
+    };
+  }, [hasMore, loadingMore, loadSales]);
 
   const todaySummary = useMemo(() => {
     const start = new Date();
@@ -1304,9 +1381,6 @@ function SalesTab() {
     const total = todays.reduce((sum, s) => sum + Number(s.total), 0);
     return { count: todays.length, total };
   }, [sales]);
-
-  if (loading)
-    return <p className="font-serif italic text-ink-muted">Cargando…</p>;
 
   return (
     <div>
@@ -1323,7 +1397,50 @@ function SalesTab() {
         </div>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="card p-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+          <div>
+            <label className="block text-xs eyebrow mb-2">Buscar factura</label>
+            <input
+              type="text"
+              className="input"
+              placeholder="Ej: F-2026"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs eyebrow mb-2">Desde</label>
+            <input
+              type="date"
+              className="input"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs eyebrow mb-2">Hasta</label>
+            <input
+              type="date"
+              className="input"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn-secondary py-2 text-xs"
+            onClick={() => {
+              setSearch("");
+              setDateFrom("");
+              setDateTo("");
+            }}
+          >
+            Limpiar filtros
+          </button>
+        </div>
+      </div>
+
+      <div className="card overflow-hidden" ref={scrollContainerRef}>
         <table className="w-full text-sm">
           <thead className="bg-cream-100 text-left text-ink-muted text-xs uppercase tracking-widest">
             <tr>
@@ -1333,10 +1450,18 @@ function SalesTab() {
               <th className="p-3">Atendió</th>
               <th className="p-3">Pago</th>
               <th className="p-3 text-right">Total</th>
+              <th className="p-3">PDF</th>
             </tr>
           </thead>
           <tbody>
-            {sales.map((s) => (
+            {loading && (
+              <tr>
+                <td colSpan={7} className="p-6 text-center text-ink-muted font-serif italic">
+                  Cargando…
+                </td>
+              </tr>
+            )}
+            {!loading && sales.map((s) => (
               <tr key={s.id} className="border-t border-cream-300/50">
                 <td className="p-3 font-mono text-xs">{s.invoice_number}</td>
                 <td className="p-3">#{s.ticket_number}</td>
@@ -1346,22 +1471,39 @@ function SalesTab() {
                 <td className="p-3 text-right font-semibold">
                   {formatCurrency(Number(s.total))}
                 </td>
+                <td className="p-3 text-center">
+                  {s.pdf_url ? (
+                    <a
+                      href={s.pdf_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-brand hover:text-brand-darker text-xs font-semibold"
+                    >
+                      Ver PDF
+                    </a>
+                  ) : (
+                    <span className="text-ink-light text-xs">Sin PDF</span>
+                  )}
+                </td>
               </tr>
             ))}
-            {sales.length === 0 && (
+            {sales.length === 0 && !loading && (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-ink-light">
-                  Aún no hay ventas registradas.
+                <td colSpan={7} className="p-6 text-center text-ink-light">
+                  {search || dateFrom || dateTo
+                    ? "No hay ventas que coincidan con los filtros."
+                    : "Aún no hay ventas registradas."}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+        {loadingMore && (
+          <div className="p-4 text-center text-sm text-ink-muted">
+            Cargando más ventas…
+          </div>
+        )}
       </div>
-      <p className="text-xs text-ink-light mt-3">
-        Se muestran las últimas 100 ventas. Para reportes avanzados, exporta
-        desde Supabase.
-      </p>
     </div>
   );
 }
