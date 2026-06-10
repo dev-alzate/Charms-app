@@ -1,6 +1,6 @@
 # Arquitectura — Charms App
 
-Documento de referencia para futuros desarrolladores (o futuro-yo).
+Documento de referencia para futuros desarrolladores.
 Resume las decisiones técnicas y, sobre todo, **por qué** se tomaron así.
 
 ---
