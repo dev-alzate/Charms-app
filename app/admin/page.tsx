@@ -273,6 +273,7 @@ export default function AdminPage() {
             </Link>
           ))}
           <button
+            data-testid="logout-btn"
             onClick={() => signOut({ callbackUrl: "/login" })}
             title={collapsed ? "Cerrar sesión" : undefined}
             className={`flex items-center w-full rounded-lg text-sm transition-all ${
@@ -318,7 +319,7 @@ export default function AdminPage() {
         </div>
 
         {/* Contenido del tab */}
-        <section className="flex-1 p-4 md:p-8">
+        <section data-testid="admin-content" className="flex-1 p-4 md:p-8">
           {tab === "home"       && <HomeTab onNavigate={setTab} />}
           {tab === "config"     && <ConfigTab />}
           {tab === "products"   && <ProductsTab />}

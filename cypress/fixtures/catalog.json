@@ -1,0 +1,19 @@
+{
+  "categories": [
+    { "id": "cat-1", "name": "Cadenas", "display_order": 1, "color": "#9333EA", "active": true, "created_at": "2026-01-01T00:00:00Z" },
+    { "id": "cat-2", "name": "Letras", "display_order": 2, "color": "#06B6D4", "active": true, "created_at": "2026-01-01T00:00:00Z" },
+    { "id": "cat-3", "name": "Símbolos", "display_order": 3, "color": "#EF4444", "active": true, "created_at": "2026-01-01T00:00:00Z" }
+  ],
+  "paymentMethods": [
+    { "id": "pm-1", "key": "cash", "label": "Efectivo", "active": true, "display_order": 1 },
+    { "id": "pm-2", "key": "transfer", "label": "Transferencia", "active": true, "display_order": 2 },
+    { "id": "pm-3", "key": "card", "label": "Datáfono", "active": true, "display_order": 3 }
+  ],
+  "products": [
+    { "id": "prod-1", "code": "CAD-01", "name": "Cadena plata corta", "price": 25000, "category_id": "cat-1", "image_url": null, "active": true, "display_order": 1, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z" },
+    { "id": "prod-2", "code": "CAD-02", "name": "Cadena plata larga", "price": 32000, "category_id": "cat-1", "image_url": null, "active": true, "display_order": 2, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z" },
+    { "id": "prod-3", "code": "L-A", "name": "Letra A", "price": 5000, "category_id": "cat-2", "image_url": null, "active": true, "display_order": 3, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z" },
+    { "id": "prod-4", "code": "L-B", "name": "Letra B", "price": 5000, "category_id": "cat-2", "image_url": null, "active": true, "display_order": 4, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z" },
+    { "id": "prod-5", "code": "S-47", "name": "Corazón pequeño", "price": 5500, "category_id": "cat-3", "image_url": null, "active": true, "display_order": 5, "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z" }
+  ]
+}

@@ -676,7 +676,7 @@ export default function SalePage() {
   // ─── Vista: éxito de venta ─────────────────────────────────────────────
   if (view === "success" && completedSale) {
     return (
-      <main className="min-h-screen p-4 bg-cream-100">
+      <main data-testid="sale-success" className="min-h-screen p-4 bg-cream-100">
         <div className="max-w-md mx-auto pt-8">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-brand/10 mb-4">
@@ -697,7 +697,7 @@ export default function SalePage() {
             <div className="flex justify-center gap-6 text-sm">
               <span className="text-ink-muted">
                 Factura{" "}
-                <span className="font-mono text-ink">
+                <span data-testid="invoice-number" className="font-mono text-ink">
                   {completedSale.invoice_number}
                 </span>
               </span>
@@ -906,6 +906,7 @@ export default function SalePage() {
           </div>
 
           <button
+            data-testid="confirm-sale-btn"
             className="btn-confirm w-full py-5 text-base"
             onClick={confirmPayment}
             disabled={!payment || submitting}
@@ -989,6 +990,7 @@ export default function SalePage() {
                 <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <input
+                data-testid="search-input"
                 className="input pl-9 pr-8"
                 type="search"
                 placeholder="Buscar por nombre, código, categoría o precio…"
@@ -1085,6 +1087,8 @@ export default function SalePage() {
                 return (
                   <button
                     key={p.id}
+                    data-testid="product-card"
+                    data-code={p.code}
                     className="card p-0 text-left active:scale-[0.98] transition-all hover:border-brand/50 hover:shadow-md overflow-hidden"
                     onClick={() => addToCart(p)}
                   >
@@ -1208,6 +1212,7 @@ export default function SalePage() {
                     {paymentMethods.map((m) => (
                       <button
                         key={m.key}
+                        data-testid={`pm-${m.key}`}
                         onClick={() => { setPayment(m.key as PaymentMethod); setPaymentWarning(false); }}
                         className={`flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl border text-xs font-medium transition-all ${
                           payment === m.key
@@ -1228,6 +1233,7 @@ export default function SalePage() {
                 </p>
               )}
               <button
+                data-testid="checkout-btn"
                 className="btn-confirm w-full py-5 flex items-center justify-between px-6"
                 onClick={() => {
                   if (!payment) { setPaymentWarning(true); return; }
@@ -1275,7 +1281,7 @@ export default function SalePage() {
           ) : (
             <ul className="divide-y divide-cream-100 py-1">
               {cart.map((it) => (
-                <li key={it.product_id} className="px-4 py-3">
+                <li key={it.product_id} data-testid="cart-line" data-code={it.code} className="px-4 py-3">
                   <div className="flex items-start gap-3 mb-2">
                     {/* Miniatura del producto */}
                     <div className="w-12 h-12 rounded-lg overflow-hidden bg-cream-200 flex items-center justify-center flex-shrink-0">
@@ -1357,6 +1363,7 @@ export default function SalePage() {
                 {paymentMethods.map((m) => (
                   <button
                     key={m.key}
+                    data-testid={`pm-${m.key}`}
                     onClick={() => { setPayment(m.key as PaymentMethod); setPaymentWarning(false); }}
                     className={`flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl border text-xs font-medium transition-all ${
                       payment === m.key
@@ -1383,6 +1390,7 @@ export default function SalePage() {
 
           {/* Botón cobrar */}
           <button
+            data-testid="checkout-btn"
             className="btn-confirm w-full py-4 flex items-center justify-between px-5 disabled:opacity-40 disabled:cursor-not-allowed"
             onClick={() => {
               if (!payment) { setPaymentWarning(true); return; }

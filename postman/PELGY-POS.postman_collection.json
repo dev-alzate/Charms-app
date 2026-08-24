@@ -1,0 +1,444 @@
+{
+  "info": {
+    "name": "PELGY POS — Supabase REST API",
+    "_postman_id": "pelgy-pos-supabase-rest",
+    "description": "Validación funcional de los endpoints REST de Supabase (PostgREST) que consume PELGY POS, más comprobaciones de las reglas de Row Level Security (RLS).\n\nTodas las peticiones usan las variables de entorno `{{supabase_url}}` y `{{anon_key}}` (ver PELGY-POS.postman_environment.json). Nunca se commitean secretos: el entorno se rellena localmente.\n\nCarpetas:\n- **Lecturas (catálogo)**: categorías, productos (con filtros de categoría y búsqueda ilike), settings, métodos de pago y vendedores — lo que la pantalla /sale lee al arrancar.\n- **Escritura (ventas)**: POST /sales; el trigger `trg_set_invoice_number` asigna el `invoice_number` en formato `F-YYYY-XXXX`.\n- **RLS / Seguridad**: sin `apikey` la API responde 401; con la anon key las políticas `USING(true) WITH CHECK(true)` conceden acceso completo (documentado y verificado).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "rest", "value": "{{supabase_url}}/rest/v1", "type": "string" }
+  ],
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "apikey", "type": "string" },
+      { "key": "value", "value": "{{anon_key}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Lecturas (catálogo)",
+      "item": [
+        {
+          "name": "GET categorías activas",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" }
+            ],
+            "url": {
+              "raw": "{{rest}}/categories?select=*&active=eq.true&order=display_order.asc",
+              "host": ["{{rest}}"],
+              "path": ["categories"],
+              "query": [
+                { "key": "select", "value": "*" },
+                { "key": "active", "value": "eq.true" },
+                { "key": "order", "value": "display_order.asc" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('devuelve un arreglo de categorías', () => pm.expect(body).to.be.an('array'));",
+                  "pm.test('cada categoría trae id y name', () => {",
+                  "  if (body.length) pm.expect(body[0]).to.include.keys(['id', 'name']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET productos (paginado)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" },
+              { "key": "Range-Unit", "value": "items" },
+              { "key": "Range", "value": "0-29" },
+              { "key": "Prefer", "value": "count=exact" }
+            ],
+            "url": {
+              "raw": "{{rest}}/products?select=*&active=eq.true&order=name.asc",
+              "host": ["{{rest}}"],
+              "path": ["products"],
+              "query": [
+                { "key": "select", "value": "*" },
+                { "key": "active", "value": "eq.true" },
+                { "key": "order", "value": "name.asc" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200/206 OK', () => pm.expect(pm.response.code).to.be.oneOf([200, 206]));",
+                  "const body = pm.response.json();",
+                  "pm.test('devuelve productos con price', () => {",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  if (body.length) pm.expect(body[0]).to.include.keys(['id', 'name', 'price', 'code']);",
+                  "});",
+                  "pm.test('expone Content-Range para paginación', () => {",
+                  "  pm.expect(pm.response.headers.has('Content-Range')).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET productos filtrados por categoría",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" }
+            ],
+            "url": {
+              "raw": "{{rest}}/products?select=*&active=eq.true&category_id=eq.{{sample_category_id}}",
+              "host": ["{{rest}}"],
+              "path": ["products"],
+              "query": [
+                { "key": "select", "value": "*" },
+                { "key": "active", "value": "eq.true" },
+                { "key": "category_id", "value": "eq.{{sample_category_id}}" }
+              ]
+            },
+            "description": "Reproduce el filtro por categoría de /sale. Setea `sample_category_id` en el entorno con un id real para asertar contenido; sin él, solo valida el contrato (200 + arreglo)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('todos los productos son de la categoría pedida', () => {",
+                  "  const catId = pm.environment.get('sample_category_id');",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  if (catId) body.forEach((p) => pm.expect(p.category_id).to.eql(catId));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET productos por búsqueda (ilike)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" }
+            ],
+            "url": {
+              "raw": "{{rest}}/products?select=*&active=eq.true&or=(name.ilike.*{{search}}*,code.ilike.*{{search}}*)",
+              "host": ["{{rest}}"],
+              "path": ["products"],
+              "query": [
+                { "key": "select", "value": "*" },
+                { "key": "active", "value": "eq.true" },
+                { "key": "or", "value": "(name.ilike.*{{search}}*,code.ilike.*{{search}}*)" }
+              ]
+            },
+            "description": "Búsqueda en vivo de /sale: coincide por nombre O código (case-insensitive). Setea `search` en el entorno."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('los resultados coinciden con el término', () => {",
+                  "  const q = (pm.environment.get('search') || '').toLowerCase();",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  if (q) body.forEach((p) => {",
+                  "    const hit = (p.name || '').toLowerCase().includes(q) || (p.code || '').toLowerCase().includes(q);",
+                  "    pm.expect(hit, p.name).to.be.true;",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET setting require_seller_login",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" },
+              { "key": "Accept", "value": "application/vnd.pgrst.object+json" }
+            ],
+            "url": {
+              "raw": "{{rest}}/settings?select=value&key=eq.require_seller_login",
+              "host": ["{{rest}}"],
+              "path": ["settings"],
+              "query": [
+                { "key": "select", "value": "value" },
+                { "key": "key", "value": "eq.require_seller_login" }
+              ]
+            },
+            "description": "maybeSingle() → objeto único (Accept: pgrst.object+json). Igual que el gate de vendedor en /sale."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('value es \"true\" o \"false\"', () => pm.expect(body.value).to.be.oneOf(['true', 'false']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET métodos de pago activos",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" }
+            ],
+            "url": {
+              "raw": "{{rest}}/payment_methods?select=*&active=eq.true&order=display_order.asc",
+              "host": ["{{rest}}"],
+              "path": ["payment_methods"],
+              "query": [
+                { "key": "select", "value": "*" },
+                { "key": "active", "value": "eq.true" },
+                { "key": "order", "value": "display_order.asc" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('cada método trae key y label', () => {",
+                  "  pm.expect(body).to.be.an('array');",
+                  "  if (body.length) pm.expect(body[0]).to.include.keys(['key', 'label']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET vendedor por nombre y código",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" }
+            ],
+            "url": {
+              "raw": "{{rest}}/sellers?select=id&active=eq.true&name=ilike.{{seller_name}}&code=eq.{{seller_code}}",
+              "host": ["{{rest}}"],
+              "path": ["sellers"],
+              "query": [
+                { "key": "select", "value": "id" },
+                { "key": "active", "value": "eq.true" },
+                { "key": "name", "value": "ilike.{{seller_name}}" },
+                { "key": "code", "value": "eq.{{seller_code}}" }
+              ]
+            },
+            "description": "Validación del gate de vendedor cuando require_seller_login=true. Setea `seller_name` y `seller_code` en el entorno con un vendedor real."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('respuesta es un arreglo (0 o 1 vendedor)', () => {",
+                  "  pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Escritura (ventas)",
+      "item": [
+        {
+          "name": "POST crear venta",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Prefer", "value": "return=representation" }
+            ],
+            "url": {
+              "raw": "{{rest}}/sales",
+              "host": ["{{rest}}"],
+              "path": ["sales"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [\n    { \"product_id\": \"qa-postman\", \"code\": \"QA-01\", \"name\": \"Producto QA (Postman)\", \"price\": 1000, \"quantity\": 1 }\n  ],\n  \"total\": 1000,\n  \"payment_method\": \"cash\",\n  \"customer_name\": \"Cliente QA Postman\",\n  \"customer_phone\": null,\n  \"identifier_name\": \"QA Tester\"\n}"
+            },
+            "description": "Crea una venta real. El trigger BEFORE INSERT asigna invoice_number (F-YYYY-XXXX) y ticket_number.\n\n⚠️ Escribe en la BD. Úsalo contra un proyecto de staging/pruebas, no producción."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "const sale = Array.isArray(body) ? body[0] : body;",
+                  "pm.test('el trigger asignó invoice_number F-YYYY-XXXX', () => {",
+                  "  pm.expect(sale.invoice_number).to.match(/^F-\\d{4}-\\d{4}$/);",
+                  "});",
+                  "pm.test('el trigger asignó ticket_number', () => {",
+                  "  pm.expect(sale.ticket_number).to.be.a('number');",
+                  "});",
+                  "pm.test('persistió el método de pago y el total', () => {",
+                  "  pm.expect(sale.payment_method).to.eql('cash');",
+                  "  pm.expect(Number(sale.total)).to.eql(1000);",
+                  "});",
+                  "// Guardar id para posibles limpiezas manuales",
+                  "if (sale && sale.id) pm.environment.set('last_sale_id', sale.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST venta con método inválido (rechazo)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{rest}}/sales",
+              "host": ["{{rest}}"],
+              "path": ["sales"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"items\": [],\n  \"total\": 0,\n  \"payment_method\": \"bitcoin\"\n}"
+            },
+            "description": "El CHECK sales_payment_method_check solo admite cash/transfer/card. Un método inválido debe rechazarse."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('rechazado por la restricción CHECK', () => {",
+                  "  pm.expect(pm.response.code).to.be.oneOf([400, 409]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "RLS / Seguridad",
+      "item": [
+        {
+          "name": "GET sin apikey → 401",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rest}}/sales?select=id&limit=1",
+              "host": ["{{rest}}"],
+              "path": ["sales"],
+              "query": [
+                { "key": "select", "value": "id" },
+                { "key": "limit", "value": "1" }
+              ]
+            },
+            "description": "Sin la cabecera apikey, PostgREST rechaza la petición: demuestra el límite de autenticación de la capa REST."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 sin apikey', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET ventas con anon key → 200 (RLS permisiva)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "apikey", "value": "{{anon_key}}" },
+              { "key": "Authorization", "value": "Bearer {{anon_key}}" }
+            ],
+            "url": {
+              "raw": "{{rest}}/sales?select=invoice_number,total,payment_method&order=created_at.desc&limit=5",
+              "host": ["{{rest}}"],
+              "path": ["sales"],
+              "query": [
+                { "key": "select", "value": "invoice_number,total,payment_method" },
+                { "key": "order", "value": "created_at.desc" },
+                { "key": "limit", "value": "5" }
+              ]
+            },
+            "description": "Con la anon key las políticas RLS `USING(true) WITH CHECK(true)` conceden acceso completo de lectura. Es intencional para este MVP de feria (un solo negocio, sin datos multi-tenant), y esta prueba lo documenta de forma explícita."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK con anon key', () => pm.response.to.have.status(200));",
+                  "pm.test('la RLS permite leer ventas (política USING(true))', () => {",
+                  "  pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
